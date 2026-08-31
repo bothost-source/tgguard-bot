@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: tgguard-frontend
+    runtime: static
+    buildCommand: cd tgguard-website && npm install && npm run build
+    staticPublishPath: ./tgguard-website/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://tgguard-api.onrender.com/api
+
+  - type: web
+    name: tgguard-api
+    runtime: node
+    buildCommand: cd tgguard-backend && npm install
+    startCommand: cd tgguard-backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false  # Set in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OWNER_TELEGRAM_ID
+        sync: false
+      - key: FRONTEND_URL
+        value: https://tgguard-frontend.onrender.com
