@@ -20,7 +20,7 @@ app.use(cors({
   credentials: true 
 }))
 
-// Rate limiting
+// Rate limiting — BUT skip health check so UptimeRobot doesn't get blocked
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -33,9 +33,32 @@ app.use(express.json())
 // Connect MongoDB before starting server
 await connectDB()
 
-// Health check
+// === HEALTH CHECK ENDPOINTS ===
+// Root health check (UptimeRobot can hit this too)
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    service: 'tgguard-bot',
+    timestamp: new Date().toISOString() 
+  })
+})
+
+// API health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.status(200).json({ 
+    status: 'ok', 
+    service: 'tgguard-bot',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  })
+})
+
+// Also handle /api/ bare path gracefully (your screenshot error)
+app.get('/api', (req, res) => {
+  res.status(200).json({ 
+    message: 'TGGuard API', 
+    endpoints: ['/api/health', '/api/auth', '/api/groups', '/api/owner'] 
+  })
 })
 
 // Routes
