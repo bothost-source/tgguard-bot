@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
-import { pool } from '../models/db.js'
+import { db } from '../models/db.js'
+import { ObjectId } from 'mongodb'
 
 export async function authenticate(req, res, next) {
   try {
@@ -9,13 +10,16 @@ export async function authenticate(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const result = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.userId])
-
-    if (result.rows.length === 0) {
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(decoded.userId) },
+      { projection: { password: 0 } }
+    )
+    
+    if (!user) {
       return res.status(401).json({ error: 'User not found' })
     }
 
-    req.user = result.rows[0]
+    req.user = user
     next()
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' })
@@ -32,7 +36,5 @@ export function requireRole(role) {
 }
 
 export function requireGroupAccess(req, res, next) {
-  // Middleware to verify user has access to the requested group
-  // This will be implemented in group routes
   next()
 }
