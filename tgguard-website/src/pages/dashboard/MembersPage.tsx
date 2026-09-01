@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Search, Shield, Warning, UserX, Ban } from 'lucide-react'
+import { Users, Search, Shield, AlertTriangle, UserX, Ban } from 'lucide-react'
 import AnimatedCard from '../../components/AnimatedCard'
 import GlassButton from '../../components/GlassButton'
 
@@ -136,7 +136,7 @@ export default function MembersPage({ group }: Props) {
                 {!member.isAdmin && (
                   <div className="flex gap-2">
                     <GlassButton variant="ghost" size="sm" onClick={() => handleWarn(member.id)}>
-                      <Warning className="w-3 h-3 mr-1" />Warn
+                      <AlertTriangle className="w-3 h-3 mr-1" />Warn
                     </GlassButton>
                     <GlassButton variant="ghost" size="sm" onClick={() => handleClear(member.id)}>
                       Clear
