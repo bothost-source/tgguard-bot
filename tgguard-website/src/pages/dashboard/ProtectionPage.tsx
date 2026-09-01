@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Shield, MessageSquare, Link2, Type, Image, Lock, Ban, AlertTriangle
+  MessageSquare, Link2, Type, Image, Ban, AlertTriangle
 } from 'lucide-react'
 import ToggleSwitch from '../../components/ToggleSwitch'
 import AnimatedCard from '../../components/AnimatedCard'
