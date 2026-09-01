@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Check, AlertTriangle, RefreshCw } from 'lucide-react'
+import { X, Plus, Check, RefreshCw } from 'lucide-react'
 import GlassButton from '../../components/GlassButton'
 
 interface Props {
