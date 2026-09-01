@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, Filter, Trash2, Warning, Lock, Shield, Link2, Type, Ban } from 'lucide-react'
+import { FileText, Filter, Trash2, AlertTriangle, Lock, Shield, Link2, Type, Ban } from 'lucide-react'
 import AnimatedCard from '../../components/AnimatedCard'
 
 interface Props {
@@ -17,7 +17,7 @@ interface LogEntry {
 }
 
 const typeIcons: Record<string, any> = {
-  delete: Trash2, warn: Warning, restrict: Lock, ban: Ban, filter: Type, link: Link2, spam: Shield,
+  delete: Trash2, warn: AlertTriangle, restrict: Lock, ban: Ban, filter: Type, link: Link2, spam: Shield,
 }
 
 const typeColors: Record<string, string> = {
