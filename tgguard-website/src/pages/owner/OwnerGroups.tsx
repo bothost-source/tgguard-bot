@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { UsersRound, Shield, Gamepad2, TrendingUp, TrendingDown } from 'lucide-react'
+import { UsersRound, Shield, TrendingUp, TrendingDown } from 'lucide-react'
 import StatCard from '../../components/StatCard'
 import AnimatedCard from '../../components/AnimatedCard'
 
