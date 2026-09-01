@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 
-const API_URL = (import.meta as any).env.VITE_API_URL || '/api'
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
-interface User {
+export interface User {
   id: string
   telegram_id: string
   username: string
@@ -13,16 +13,20 @@ interface User {
 
 interface AuthContextType {
   user: User | null
+  isLoading: boolean
+  isAuthenticated: boolean
   login: () => void
   logout: () => void
-  isLoading: boolean
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  isLoading: true,
+  isAuthenticated: false,
   login: () => {},
   logout: () => {},
-  isLoading: true,
+  refreshUser: async () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -31,32 +35,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
+  const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('tgguard_token')
-    if (token) {
-      fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
+    if (!token) {
+      setUser(null)
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => setUser(data))
-        .finally(() => setIsLoading(false))
-    } else {
+
+      if (res.ok) {
+        const data = await res.json()
+        setUser(data)
+      } else if (res.status === 401) {
+        localStorage.removeItem('tgguard_token')
+        setUser(null)
+      } else {
+        setUser(null)
+      }
+    } catch (err) {
+      console.error('Auth refresh failed:', err)
+      setUser(null)
+    } finally {
       setIsLoading(false)
     }
   }, [])
 
-  const login = () => {
-    window.location.href = `${API_URL}/auth/telegram`
-  }
+  useEffect(() => {
+    refreshUser()
+  }, [refreshUser])
 
-  const logout = () => {
+  const login = useCallback(() => {
+    window.location.href = `${API_URL}/auth/telegram`
+  }, [])
+
+  const logout = useCallback(() => {
     localStorage.removeItem('tgguard_token')
     setUser(null)
     window.location.href = '/'
-  }
+  }, [])
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAuthenticated: !!user,
+        login,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
