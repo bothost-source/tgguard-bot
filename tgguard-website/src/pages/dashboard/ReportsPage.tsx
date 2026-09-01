@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Eye, Warning, UserX, ShieldCheck, X } from 'lucide-react'
+import { Eye, AlertTriangle, UserX, ShieldCheck, X } from 'lucide-react'
 import AnimatedCard from '../../components/AnimatedCard'
 import GlassButton from '../../components/GlassButton'
 
@@ -148,7 +148,7 @@ export default function ReportsPage({ group }: Props) {
                   <Eye className="w-4 h-4 mr-1" />View
                 </GlassButton>
                 <GlassButton variant="ghost" size="sm" onClick={() => handleAction(report.id, 'warn')}>
-                  <Warning className="w-4 h-4 mr-1" />Warn
+                  <AlertTriangle className="w-4 h-4 mr-1" />Warn
                 </GlassButton>
                 <GlassButton variant="ghost" size="sm" onClick={() => handleAction(report.id, 'restrict')}>
                   <UserX className="w-4 h-4 mr-1" />Restrict
