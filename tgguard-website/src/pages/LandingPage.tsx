@@ -3,7 +3,7 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
   Shield, Lock, MessageSquare, Gamepad2, BarChart3, Zap,
-  ChevronRight, Star, Users, Globe, ArrowRight
+  ChevronRight, ArrowRight, BookOpenText
 } from 'lucide-react'
 import GlassButton from '../components/GlassButton'
 import AnimatedCard from '../components/AnimatedCard'
@@ -111,7 +111,7 @@ export default function LandingPage() {
             </Link>
             <a href="/docs">
               <GlassButton variant="secondary" size="lg">
-                <BookOpen className="w-5 h-5 mr-2 inline" />
+                <BookOpenText className="w-5 h-5 mr-2 inline" />
                 Documentation
               </GlassButton>
             </a>
