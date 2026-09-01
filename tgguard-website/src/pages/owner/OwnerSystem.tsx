@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Server, Database, Bot, Activity, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import AnimatedCard from '../../components/AnimatedCard'
 
 interface SystemHealth {
