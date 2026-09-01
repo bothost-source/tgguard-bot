@@ -1,54 +1,43 @@
-import { motion } from 'framer-motion'
-import { ReactNode } from 'react'
+import { ReactNode, ButtonHTMLAttributes } from 'react'
+import { cn } from '../lib/utils'
 
-interface Props {
-  children: ReactNode
-  onClick?: () => void
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
+interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'ghost'
   size?: 'sm' | 'md' | 'lg'
-  className?: string
-  type?: 'button' | 'submit'
-  disabled?: boolean
+  children: ReactNode
 }
 
 export default function GlassButton({
-  children,
-  onClick,
   variant = 'primary',
   size = 'md',
-  className = '',
-  type = 'button',
-  disabled = false,
+  children,
+  className,
+  ...props
 }: Props) {
   const variants = {
-    primary: 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500',
-    secondary: 'bg-white/10 text-white border border-white/20 hover:bg-white/20',
-    danger: 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-400 hover:to-red-500',
-    ghost: 'text-white/70 hover:text-white hover:bg-white/5',
+    primary: 'bg-white text-black hover:bg-white/90',
+    secondary: 'bg-white/[0.06] text-white border border-white/[0.08] hover:bg-white/[0.1] hover:border-white/[0.15]',
+    ghost: 'text-white/60 hover:text-white hover:bg-white/[0.05]',
   }
 
   const sizes = {
     sm: 'px-4 py-2 text-sm',
-    md: 'px-6 py-3 text-base',
-    lg: 'px-8 py-4 text-lg',
+    md: 'px-5 py-2.5 text-sm',
+    lg: 'px-6 py-3 text-base',
   }
 
   return (
-    <motion.button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      whileHover={{ scale: disabled ? 1 : 1.03 }}
-      whileTap={{ scale: disabled ? 1 : 0.97 }}
-      className={`
-        rounded-xl font-semibold transition-all duration-200
-        ${variants[variant]}
-        ${sizes[size]}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-        ${className}
-      `}
+    <button
+      className={cn(
+        'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200',
+        'hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
+        variants[variant],
+        sizes[size],
+        className
+      )}
+      {...props}
     >
       {children}
-    </motion.button>
+    </button>
   )
 }
