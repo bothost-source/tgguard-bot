@@ -319,9 +319,7 @@ async function showAddToGroup(ctx) {
 async function showGamesMenu(ctx) {
   const chatId = ctx.chat?.id
   if (!chatId || ctx.chat?.type === 'private') {
-    await ctx.reply('🎮 TGGuard Games
-
-Games are played in Telegram groups. Enable them in your group dashboard.', {
+    await ctx.reply('🎮 TGGuard Games are played in Telegram groups. Enable them in your group dashboard.', {
       reply_markup: { inline_keyboard: [
         [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
         [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
@@ -350,11 +348,7 @@ Games are played in Telegram groups. Enable them in your group dashboard.', {
 }
 
 async function showRateMenu(ctx) {
-  await ctx.reply('⭐ Rate TGGuard
-
-How would you rate your experience?
-
-⭐ ⭐ ⭐ ⭐ ⭐', {
+  await ctx.reply('⭐ Rate TGGuard How would you rate your experience? ⭐ ⭐ ⭐ ⭐ ⭐', {
     reply_markup: { inline_keyboard: [
       [{ text: '⭐', callback_data: 'rate_1' }, { text: '⭐⭐', callback_data: 'rate_2' }],
       [{ text: '⭐⭐⭐', callback_data: 'rate_3' }, { text: '⭐⭐⭐⭐', callback_data: 'rate_4' }],
@@ -370,12 +364,9 @@ async function showLeaderboard(ctx) {
     { $sort: { total: -1 } },
     { $limit: 10 }
   ]).toArray()
-  let text = '🏆 TGGuard Global Leaderboard
-
-'
+  let text = '🏆 TGGuard Global Leaderboard'
   if (topScores.length === 0) { text += 'No games played yet. Be the first!' }
-  else { topScores.forEach((s, i) => { const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`; text += `${medal} ${s.username || `User${s._id}`} — ${s.total} points
-` }) }
+  else { topScores.forEach((s, i) => { const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`; text += `${medal} ${s.username || `User${s._id}`} — ${s.total} points` }) }
   await ctx.reply(text, {
     reply_markup: { inline_keyboard: [
       [{ text: '🎮 Play Games', callback_data: 'games' }],
