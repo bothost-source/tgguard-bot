@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Settings, Key, Bell, Globe } from 'lucide-react'
+import { Key, Bell, Globe } from 'lucide-react'
 import AnimatedCard from '../../components/AnimatedCard'
 import ToggleSwitch from '../../components/ToggleSwitch'
 import GlassButton from '../../components/GlassButton'
