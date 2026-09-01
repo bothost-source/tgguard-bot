@@ -3,11 +3,12 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import dotenv from 'dotenv'
-import { connectDB } from './models/db.js'
+import { connectDB, db } from './models/db.js'
 import authRoutes from './routes/auth.js'
 import groupRoutes from './routes/groups.js'
 import ownerRoutes from './routes/owner.js'
-import { errorHandler } from './middleware/error.js'
+import { errorHandler, notFoundHandler } from './middleware/error.js'
+import { startBot } from './services/bot.js'
 
 dotenv.config()
 
@@ -15,12 +16,12 @@ const app = express()
 
 // Security middleware
 app.use(helmet())
-app.use(cors({ 
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', 
-  credentials: true 
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
 }))
 
-// Rate limiting — BUT skip health check so UptimeRobot doesn't get blocked
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -30,34 +31,41 @@ app.use('/api/', limiter)
 
 app.use(express.json())
 
-// Connect MongoDB before starting server
+// Connect MongoDB
 await connectDB()
 
-// === HEALTH CHECK ENDPOINTS ===
-// Root health check (UptimeRobot can hit this too)
+// Health check endpoints
 app.get('/', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
-    service: 'tgguard-bot',
-    timestamp: new Date().toISOString() 
+  res.status(200).json({
+    status: 'ok',
+    service: 'tgguard-backend',
+    timestamp: new Date().toISOString()
   })
 })
 
-// API health check
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
-    service: 'tgguard-bot',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  })
+app.get('/api/health', async (req, res) => {
+  try {
+    await db.admin().ping()
+    res.status(200).json({
+      status: 'ok',
+      service: 'tgguard-backend',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: 'connected'
+    })
+  } catch {
+    res.status(503).json({
+      status: 'error',
+      service: 'tgguard-backend',
+      database: 'disconnected'
+    })
+  }
 })
 
-// Also handle /api/ bare path gracefully (your screenshot error)
 app.get('/api', (req, res) => {
-  res.status(200).json({ 
-    message: 'TGGuard API', 
-    endpoints: ['/api/health', '/api/auth', '/api/groups', '/api/owner'] 
+  res.status(200).json({
+    message: 'TGGuard API',
+    endpoints: ['/api/health', '/api/auth', '/api/groups', '/api/owner']
   })
 })
 
@@ -66,10 +74,21 @@ app.use('/api/auth', authRoutes)
 app.use('/api/groups', groupRoutes)
 app.use('/api/owner', ownerRoutes)
 
-// Error handler
+// 404 and error handlers
+app.use(notFoundHandler)
 app.use(errorHandler)
 
+// Start server
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => {
   console.log(`TGGuard backend running on port ${PORT}`)
 })
+
+// Start bot
+const botMode = process.env.BOT_MODE || 'polling'
+const botStarted = await startBot(botMode)
+if (botStarted) {
+  console.log(`TGGuard bot started in ${botMode} mode`)
+} else {
+  console.error('WARNING: Bot failed to start. Check BOT_TOKEN configuration.')
+}
