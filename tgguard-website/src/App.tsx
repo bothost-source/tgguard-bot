@@ -1,6 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
@@ -10,8 +9,6 @@ import FAQ from './pages/FAQ'
 import Documentation from './pages/Documentation'
 
 export default function App() {
-  const { user } = useAuth()
-
   return (
     <AnimatePresence mode="wait">
       <Routes>
@@ -33,3 +30,4 @@ export default function App() {
     </AnimatePresence>
   )
 }
+
