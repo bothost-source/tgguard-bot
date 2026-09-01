@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Users, UsersRound, Gamepad2, Star, TrendingUp, TrendingDown,
-  Activity, Server, Database, Bot, AlertTriangle
+  Users, UsersRound, Gamepad2, Star,
+  Activity, Server, AlertTriangle
 } from 'lucide-react'
 import StatCard from '../../components/StatCard'
 import AnimatedCard from '../../components/AnimatedCard'
