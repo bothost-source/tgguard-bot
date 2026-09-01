@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Routes, Route } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import Sidebar from '../components/Sidebar'
 import GroupSelector from '../components/GroupSelector'
 import OverviewPage from './dashboard/OverviewPage'
@@ -27,7 +27,6 @@ export default function Dashboard() {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
-  const navigate = useNavigate()
 
   useEffect(() => {
     fetchGroups()
