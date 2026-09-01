@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  BarChart3, Users, TrendingUp, TrendingDown, MessageSquare, Gamepad2,
-  Shield, AlertTriangle
+  Users, TrendingUp, TrendingDown, MessageSquare, Gamepad2
 } from 'lucide-react'
 import StatCard from '../../components/StatCard'
 import AnimatedCard from '../../components/AnimatedCard'
