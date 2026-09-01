@@ -71,8 +71,7 @@ Tap below to get started.`
         case 'faq': await showFAQ(ctx); break
         case 'add_to_group': await showAddToGroup(ctx); break
         case 'control_panel':
-          await ctx.reply('⚙️ Open the Control Panel at:
-' + process.env.FRONTEND_URL, {
+          await ctx.reply('⚙️ Open the Control Panel at:' + process.env.FRONTEND_URL, {
             reply_markup: { inline_keyboard: [
               [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
               [{ text: '⬅️ Back', callback_data: 'main_menu' }]
