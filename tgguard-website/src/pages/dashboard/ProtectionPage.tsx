@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Link, MessageSquare, Image, Lock, AlertTriangle, Zap, Save } from 'lucide-react'
+import { Shield, Link, MessageSquare, Image, Lock, AlertTriangle, Zap, Save, Unlock } from 'lucide-react'
 import { useGroup } from '../../context/GroupContext'
 import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
@@ -40,6 +40,23 @@ export default function ProtectionPage() {
       .finally(() => setLoading(false))
   }, [selectedGroup])
 
+  const getActiveFeatures = () => {
+    if (!settings) return 0
+    let count = 0
+    if (settings.antiSpam?.enabled) count++
+    if (settings.antiLink?.enabled) count++
+    if (settings.wordFilter?.enabled) count++
+    if (settings.lockdown?.enabled) count++
+    return count
+  }
+
+  const getSecurityStatus = () => {
+    const active = getActiveFeatures()
+    if (active >= 3) return { label: 'High Protection', color: 'text-green-400', bg: 'bg-green-500/5', border: 'border-green-500/20', icon: Shield }
+    if (active >= 1) return { label: 'Moderate Protection', color: 'text-yellow-400', bg: 'bg-yellow-500/5', border: 'border-yellow-500/20', icon: AlertTriangle }
+    return { label: 'Low Protection', color: 'text-red-400', bg: 'bg-red-500/5', border: 'border-red-500/20', icon: AlertTriangle }
+  }
+
   const toggleFeature = (key: string) => {
     if (!settings) return
     setSettings(prev => {
@@ -76,6 +93,8 @@ export default function ProtectionPage() {
     )
   }
 
+  const status = getSecurityStatus()
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -90,6 +109,22 @@ export default function ProtectionPage() {
 
       {error && <div className="glass p-4 border-red-500/20 bg-red-500/5"><p className="text-sm text-red-400">{error}</p></div>}
       {success && <div className="glass p-4 border-green-500/20 bg-green-500/5"><p className="text-sm text-green-400">{success}</p></div>}
+
+      <AnimatedCard className={`!p-4 ${status.border} ${status.bg}`}>
+        <div className="flex items-center gap-3">
+          <status.icon className={`w-5 h-5 ${status.color}`} />
+          <div className="flex-1">
+            <p className={`text-sm font-medium ${status.color}`}>{status.label}</p>
+            <p className="text-xs text-white/30">{getActiveFeatures()} of 5 protection features active</p>
+          </div>
+          {settings?.lockdown?.enabled && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20">
+              <Lock className="w-3 h-3 text-red-400" />
+              <span className="text-xs text-red-400 font-medium">Lockdown</span>
+            </div>
+          )}
+        </div>
+      </AnimatedCard>
 
       <div className="grid gap-4">
         {loading ? (
@@ -118,6 +153,33 @@ export default function ProtectionPage() {
           })
         )}
       </div>
+
+      {settings && (
+        <AnimatedCard className="!p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Lock className="w-4 h-4 text-white/40" />
+            <span className="text-sm text-white/60">Restricted Content Types</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { key: 'photos', label: 'Photos', value: settings.mediaControls?.photos || 'allowed' },
+              { key: 'videos', label: 'Videos', value: settings.mediaControls?.videos || 'allowed' },
+              { key: 'stickers', label: 'Stickers', value: settings.mediaControls?.stickers || 'allowed' },
+              { key: 'docs', label: 'Documents', value: settings.mediaControls?.docs || 'allowed' },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                <span className="text-sm text-white/60">{item.label}</span>
+                <div className="flex items-center gap-1.5">
+                  {item.value === 'blocked' ? <Lock className="w-3.5 h-3.5 text-red-400" /> : <Unlock className="w-3.5 h-3.5 text-green-400" />}
+                  <span className={`text-xs font-medium ${item.value === 'blocked' ? 'text-red-400' : 'text-green-400'}`}>
+                    {item.value === 'blocked' ? 'Blocked' : 'Allowed'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AnimatedCard>
+      )}
     </motion.div>
   )
 }
