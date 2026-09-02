@@ -67,7 +67,7 @@ router.get('/telegram', async (req, res) => {
       user_id: user._id, component: 'auth', created_at: new Date()
     })
 
-    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`)
+    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}`)
   } catch (err) {
     console.error('Telegram auth error:', err)
     await db.collection('system_logs').insertOne({
