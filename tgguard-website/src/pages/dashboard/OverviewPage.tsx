@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, Users, AlertTriangle, MessageSquare, Activity } from 'lucide-react'
+import { Shield, Users, AlertTriangle, MessageSquare, Activity, Group } from 'lucide-react'
 import { useGroup } from '../../context/GroupContext'
 import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
@@ -62,9 +62,20 @@ export default function OverviewPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard</h1>
-        <p className="text-white/40 text-sm mt-1">Overview of {selectedGroup.name}</p>
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/[0.06] flex-shrink-0">
+          {selectedGroup.avatar_url ? (
+            <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Group className="w-6 h-6 text-white/30" />
+            </div>
+          )}
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard</h1>
+          <p className="text-white/40 text-sm mt-1">Overview of {selectedGroup.name}</p>
+        </div>
       </div>
 
       {error && (
