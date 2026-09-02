@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Lock, Clock, UserX, Shield, Save } from 'lucide-react'
+import { Lock, Clock, UserX, Shield, Save, Unlock } from 'lucide-react'
 import { useGroup } from '../../context/GroupContext'
 import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
@@ -11,6 +11,7 @@ interface VerificationSettings {
   enabled: boolean
   timeout: number
   timeoutAction: string
+  lockdownMode?: boolean
 }
 
 export default function VerificationPage() {
@@ -89,6 +90,23 @@ export default function VerificationPage() {
 
       {settings?.enabled && (
         <>
+          <AnimatedCard className="!p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${settings?.lockdownMode ? 'bg-red-500/10' : 'bg-white/[0.03]'}`}>
+                  {settings?.lockdownMode ? <Lock className="w-5 h-5 text-red-400" /> : <Unlock className="w-5 h-5 text-white/30" />}
+                </div>
+                <div>
+                  <h3 className="text-white font-medium">Lockdown Mode</h3>
+                  <p className="text-xs text-white/30">Restrict all new members to read-only until verified</p>
+                </div>
+              </div>
+              <button onClick={() => setSettings(prev => prev ? { ...prev, lockdownMode: !prev.lockdownMode } : prev)} className={`w-12 h-6 rounded-full transition-colors relative ${settings?.lockdownMode ? 'bg-red-500' : 'bg-white/10'}`}>
+                <div className={`w-5 h-5 rounded-full bg-black absolute top-0.5 transition-transform ${settings?.lockdownMode ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          </AnimatedCard>
+
           <AnimatedCard>
             <div className="flex items-center gap-2 mb-4">
               <Clock className="w-4 h-4 text-white/40" />
