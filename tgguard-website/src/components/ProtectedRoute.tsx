@@ -2,11 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ReactNode } from 'react'
 
-interface Props {
-  children: ReactNode
-  allowedRoles?: string[]
-}
-
+interface Props { children: ReactNode; allowedRoles?: string[] }
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const { user, isLoading, isAuthenticated } = useAuth()
   const location = useLocation()
@@ -22,23 +18,11 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
     )
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
-  }
-
-  // If no roles specified, any authenticated user can access
-  if (!allowedRoles || allowedRoles.length === 0) {
-    return <>{children}</>
-  }
-
-  // Check role
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
+  if (!allowedRoles || allowedRoles.length === 0) return <>{children}</>
   if (!allowedRoles.includes(user!.role)) {
-    // Redirect based on actual role
-    if (user!.role === 'owner') {
-      return <Navigate to="/owner/dashboard" replace />
-    }
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={user!.role === 'owner' ? '/owner/dashboard' : '/dashboard'} replace />
   }
-
   return <>{children}</>
 }
+ 
