@@ -55,6 +55,17 @@ export default function MembersPage() {
     } finally { setActionLoading(null) }
   }
 
+  const handleRemove = async (memberId: string) => {
+    if (!selectedGroup) return
+    setActionLoading(memberId)
+    try {
+      await api.post(`/groups/${selectedGroup.id}/members/${memberId}/remove`)
+      setMembers(prev => prev.filter(m => m.id !== memberId))
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to remove member')
+    } finally { setActionLoading(null) }
+  }
+
   const filtered = members.filter(m =>
     m.username.toLowerCase().includes(search.toLowerCase()) ||
     m.firstName.toLowerCase().includes(search.toLowerCase())
@@ -184,6 +195,9 @@ export default function MembersPage() {
                         </button>
                         <button onClick={() => handleClearWarnings(member.id)} disabled={actionLoading === member.id} className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors" title="Clear Warnings">
                           <CheckCircle className="w-3.5 h-3.5 text-green-400/60" />
+                        </button>
+                        <button onClick={() => handleRemove(member.id)} disabled={actionLoading === member.id} className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors" title="Remove Member">
+                          <UserX className="w-3.5 h-3.5 text-red-400/60" />
                         </button>
                       </div>
                     </td>
