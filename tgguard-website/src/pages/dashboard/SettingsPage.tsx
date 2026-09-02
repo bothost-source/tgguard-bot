@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Key, Bell, Globe } from 'lucide-react'
+import { useGroup } from '../../context/GroupContext'
+import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
 import ToggleSwitch from '../../components/ToggleSwitch'
 import GlassButton from '../../components/GlassButton'
-
-interface Props {
-  group: { id: string; name: string } | null
-}
 
 interface GroupSettings {
   welcome: { enabled: boolean; message: string; autoDelete: boolean }
@@ -15,59 +13,44 @@ interface GroupSettings {
   notifications: { enabled: boolean }
 }
 
-export default function SettingsPage({ group }: Props) {
+export default function SettingsPage() {
+  const { selectedGroup } = useGroup()
   const [settings, setSettings] = useState<GroupSettings | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  const token = localStorage.getItem('tgguard_token')
-
   useEffect(() => {
-    if (!group) return
+    if (!selectedGroup) return
     fetchSettings()
-  }, [group])
+  }, [selectedGroup])
 
   const fetchSettings = async () => {
-    if (!group) return
+    if (!selectedGroup) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/groups/${group.id}/settings`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        setSettings(await res.json())
-      } else {
-        setError('Failed to load settings')
-      }
-    } catch (e) {
-      setError('Failed to load settings')
+      const { data } = await api.get(`/groups/${selectedGroup.id}/settings`)
+      setSettings(data)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to load settings')
     } finally {
       setLoading(false)
     }
   }
 
   const saveSettings = async () => {
-    if (!group || !settings) return
+    if (!selectedGroup || !settings) return
     setSaving(true)
     setError('')
     setSuccess('')
     try {
-      const res = await fetch(`/api/groups/${group.id}/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(settings),
-      })
-      if (res.ok) {
-        setSuccess('Settings saved successfully')
-        setTimeout(() => setSuccess(''), 3000)
-      } else {
-        setError('Failed to save settings')
-      }
-    } catch (e) {
-      setError('Failed to save settings')
+      await api.put(`/groups/${selectedGroup.id}/settings`, settings)
+      setSuccess('Settings saved successfully')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to save settings')
     } finally {
       setSaving(false)
     }
@@ -81,7 +64,7 @@ export default function SettingsPage({ group }: Props) {
     } : null)
   }
 
-  if (!group) {
+  if (!selectedGroup) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center h-96">
         <p className="text-white/50">Select a group to view settings</p>
