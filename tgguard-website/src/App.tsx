@@ -7,43 +7,36 @@ import OwnerDashboard from './pages/OwnerDashboard'
 import FAQ from './pages/FAQ'
 import Documentation from './pages/Documentation'
 import ProtectedRoute from './components/ProtectedRoute'
+import ToastContainer from './components/ToastContainer'
+import { useToast } from './hooks/useToast'
 
 function App() {
   const location = useLocation()
+  const { toasts, removeToast } = useToast()
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        {/* Public routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/faq" element={<FAQ />} />
-        <Route path="/docs" element={<Documentation />} />
-
-        {/* Community Admin Dashboard */}
-        <Route
-          path="/dashboard/*"
-          element={
+    <>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/faq" element={<FAQ />} />
+          <Route path="/docs" element={<Documentation />} />
+          <Route path="/dashboard/*" element={
             <ProtectedRoute allowedRoles={['community_admin']}>
               <Dashboard />
             </ProtectedRoute>
-          }
-        />
-
-        {/* Owner Dashboard */}
-        <Route
-          path="/owner/dashboard/*"
-          element={
+          } />
+          <Route path="/owner/dashboard/*" element={
             <ProtectedRoute allowedRoles={['owner']}>
               <OwnerDashboard />
             </ProtectedRoute>
-          }
-        />
-
-        {/* Catch all - redirect to home */}
-        <Route path="*" element={<LandingPage />} />
-      </Routes>
-    </AnimatePresence>
+          } />
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
+      </AnimatePresence>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </>
   )
 }
 
