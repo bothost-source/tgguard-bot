@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ScrollText, Filter, Activity } from 'lucide-react'
+import { ScrollText, Filter, Activity, Zap, UserCheck } from 'lucide-react'
 import { useGroup } from '../../context/GroupContext'
 import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
@@ -33,6 +33,9 @@ export default function LogsPage() {
 
   const filtered = logs.filter(l => filter === 'all' || l.type === filter)
 
+  const autoCount = logs.filter(l => l.type === 'auto').length
+  const manualCount = logs.filter(l => l.type === 'manual').length
+
   if (!selectedGroup) {
     return <div className="p-6 flex items-center justify-center min-h-[400px]"><p className="text-white/40">Select a group first</p></div>
   }
@@ -52,6 +55,42 @@ export default function LogsPage() {
             <option value="manual" className="bg-background">Manual</option>
           </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <AnimatedCard className="!p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center">
+              <Activity className="w-4 h-4 text-white/40" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{logs.length}</p>
+              <p className="text-xs text-white/30">Total Actions</p>
+            </div>
+          </div>
+        </AnimatedCard>
+        <AnimatedCard className="!p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Zap className="w-4 h-4 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{autoCount}</p>
+              <p className="text-xs text-white/30">Auto Actions</p>
+            </div>
+          </div>
+        </AnimatedCard>
+        <AnimatedCard className="!p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
+              <UserCheck className="w-4 h-4 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{manualCount}</p>
+              <p className="text-xs text-white/30">Manual Actions</p>
+            </div>
+          </div>
+        </AnimatedCard>
       </div>
 
       {error && <div className="glass p-4 border-red-500/20 bg-red-500/5"><p className="text-sm text-red-400">{error}</p></div>}
