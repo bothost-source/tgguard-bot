@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Search, AlertTriangle, Shield, CheckCircle } from 'lucide-react'
+import { Users, Search, AlertTriangle, Shield, CheckCircle, ShieldCheck, UserX } from 'lucide-react'
 import { useGroup } from '../../context/GroupContext'
 import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
@@ -60,6 +60,9 @@ export default function MembersPage() {
     m.firstName.toLowerCase().includes(search.toLowerCase())
   )
 
+  const protectedMembers = members.filter(m => m.warnings === 0).length
+  const warnedMembers = members.filter(m => m.warnings > 0).length
+
   if (!selectedGroup) {
     return <div className="p-6 flex items-center justify-center min-h-[400px]"><p className="text-white/40">Select a group first</p></div>
   }
@@ -78,6 +81,42 @@ export default function MembersPage() {
       </div>
 
       {error && <div className="glass p-4 border-red-500/20 bg-red-500/5"><p className="text-sm text-red-400">{error}</p></div>}
+
+      <div className="grid grid-cols-3 gap-4">
+        <AnimatedCard className="!p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4 text-green-400" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{protectedMembers}</p>
+              <p className="text-xs text-white/30">Clean Record</p>
+            </div>
+          </div>
+        </AnimatedCard>
+        <AnimatedCard className="!p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{warnedMembers}</p>
+              <p className="text-xs text-white/30">Warned</p>
+            </div>
+          </div>
+        </AnimatedCard>
+        <AnimatedCard className="!p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center">
+              <Shield className="w-4 h-4 text-white/40" />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">{members.filter(m => m.isAdmin).length}</p>
+              <p className="text-xs text-white/30">Admins</p>
+            </div>
+          </div>
+        </AnimatedCard>
+      </div>
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
@@ -109,11 +148,19 @@ export default function MembersPage() {
                   <tr key={member.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center relative">
                           <span className="text-xs font-medium text-white/60">{member.firstName[0]}</span>
+                          {member.isAdmin && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                              <Shield className="w-2.5 h-2.5 text-blue-400" />
+                            </div>
+                          )}
                         </div>
                         <div>
-                          <p className="text-sm text-white">{member.firstName}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm text-white">{member.firstName}</p>
+                            {member.isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Admin</span>}
+                          </div>
                           <p className="text-xs text-white/30">{member.username}</p>
                         </div>
                       </div>
