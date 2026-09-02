@@ -6,13 +6,20 @@ import { verifyTelegramHash, isAuthRecent } from '../middleware/auth.js'
 
 const router = express.Router()
 
+// Helper to get frontend URL with fallback
+const getFrontendUrl = () => {
+  const url = process.env.FRONTEND_URL || 'http://localhost:3000'
+  // Remove trailing slash if present
+  return url.replace(/\/$/, '')
+}
+
 router.get('/telegram', async (req, res) => {
   try {
     const { id, first_name, username, photo_url, auth_date, hash } = req.query
 
     if (!id || !hash || !auth_date) {
       console.error('Missing Telegram auth fields:', req.query)
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=missing_fields`)
+      return res.redirect(`${getFrontendUrl()}/login?error=missing_fields`)
     }
 
     if (!verifyTelegramHash(req.query, process.env.BOT_TOKEN)) {
@@ -21,12 +28,12 @@ router.get('/telegram', async (req, res) => {
         level: 'warning', message: 'Failed Telegram auth hash verification',
         ip: req.ip, user_agent: req.headers['user-agent'], component: 'auth', created_at: new Date()
       })
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=invalid_auth`)
+      return res.redirect(`${getFrontendUrl()}/login?error=invalid_auth`)
     }
 
     if (!isAuthRecent(auth_date)) {
       console.error('Telegram auth expired for user:', id)
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_expired`)
+      return res.redirect(`${getFrontendUrl()}/login?error=auth_expired`)
     }
 
     const telegramId = BigInt(id)
@@ -54,7 +61,7 @@ router.get('/telegram', async (req, res) => {
 
     if (!process.env.JWT_SECRET) {
       console.error('JWT_SECRET not configured')
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=server_error`)
+      return res.redirect(`${getFrontendUrl()}/login?error=server_error`)
     }
 
     const token = jwt.sign(
@@ -67,14 +74,14 @@ router.get('/telegram', async (req, res) => {
       user_id: user._id, component: 'auth', created_at: new Date()
     })
 
-    res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}`)
+    res.redirect(`${getFrontendUrl()}/login?token=${token}`)
   } catch (err) {
     console.error('Telegram auth error:', err)
     await db.collection('system_logs').insertOne({
       level: 'error', message: `Auth error: ${err.message}`, stack: err.stack,
       component: 'auth', created_at: new Date()
     })
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`)
+    res.redirect(`${getFrontendUrl()}/login?error=auth_failed`)
   }
 })
 
