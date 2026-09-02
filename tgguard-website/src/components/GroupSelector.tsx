@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, Plus, Check } from 'lucide-react'
-import { useGroup, type Group } from '../context/GroupContext'
+import { ChevronDown, Plus, Check, Group } from 'lucide-react'
+import { useGroup, type Group as GroupType } from '../context/GroupContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function GroupSelector() {
@@ -14,6 +14,7 @@ export default function GroupSelector() {
   if (groups.length === 0) {
     return (
       <div className="flex items-center gap-2 text-sm text-white/40">
+        <Group className="w-4 h-4" />
         <span>No groups connected</span>
       </div>
     )
@@ -32,7 +33,10 @@ export default function GroupSelector() {
           <>
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full left-0 mt-2 w-full min-w-[280px] glass-strong z-50 py-2">
-              <div className="px-3 py-2 text-xs text-white/30 uppercase tracking-wider font-mono">My Groups</div>
+              <div className="px-3 py-2 flex items-center gap-2 text-xs text-white/30 uppercase tracking-wider font-mono">
+                <Group className="w-3.5 h-3.5" />
+                My Groups
+              </div>
               {groups.map((group) => (
                 <button key={group.id} onClick={() => { selectGroup(group); setOpen(false) }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors ${selectedGroup?.id === group.id ? 'bg-white/[0.06]' : ''}`}>
                   <div className={`w-2 h-2 rounded-full ${group.is_active ? 'bg-green-400' : 'bg-yellow-400'}`} />
