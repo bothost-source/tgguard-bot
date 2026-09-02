@@ -51,7 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { refreshUser() }, [refreshUser])
 
   const login = useCallback(() => {
-    window.location.href = `${import.meta.env.VITE_API_URL || '/api'}/auth/telegram`
+    // VITE_API_URL should be: https://tgguard-bot.onrender.com/api
+    // This produces: https://tgguard-bot.onrender.com/api/auth/telegram
+    window.location.href = `${import.meta.env.VITE_API_URL}/auth/telegram`
   }, [])
 
   const logout = useCallback(() => {
