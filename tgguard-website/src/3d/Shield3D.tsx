@@ -1,7 +1,15 @@
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Float, MeshTransmissionMaterial, Text } from '@react-three/drei'
+import { Float, MeshTransmissionMaterial, Text } from '@react-three/fiber'
 import * as THREE from 'three'
+
+interface CubeData {
+  position: [number, number, number]
+  scale: number
+  speed: number
+  offset: number
+  color: string
+}
 
 export function Shield3D({ position = [0, 0, 0] as [number, number, number] }) {
   const shieldRef = useRef<THREE.Group>(null)
@@ -18,7 +26,7 @@ export function Shield3D({ position = [0, 0, 0] as [number, number, number] }) {
     return positions
   }, [])
 
-  useFrame((state) => {
+  useFrame((state: { clock: { elapsedTime: number } }) => {
     if (shieldRef.current) {
       shieldRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.15
     }
@@ -83,7 +91,7 @@ export function Shield3D({ position = [0, 0, 0] as [number, number, number] }) {
           </Text>
 
           {/* Orbiting dots */}
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i: number) => (
             <mesh
               key={i}
               position={[
@@ -125,11 +133,11 @@ export function Shield3D({ position = [0, 0, 0] as [number, number, number] }) {
   )
 }
 
-export function FloatingCubes({ count = 20 }) {
+export function FloatingCubes({ count = 20 }: { count?: number }) {
   const groupRef = useRef<THREE.Group>(null)
 
-  const cubes = useMemo(() => {
-    return Array.from({ length: count }, (_, i) => ({
+  const cubes = useMemo<CubeData[]>(() => {
+    return Array.from({ length: count }, (_, i: number) => ({
       position: [
         (Math.random() - 0.5) * 15,
         (Math.random() - 0.5) * 10,
@@ -142,9 +150,9 @@ export function FloatingCubes({ count = 20 }) {
     }))
   }, [count])
 
-  useFrame((state) => {
+  useFrame((state: { clock: { elapsedTime: number } }) => {
     if (groupRef.current) {
-      groupRef.current.children.forEach((child, i) => {
+      groupRef.current.children.forEach((child: THREE.Object3D, i: number) => {
         const cube = cubes[i]
         child.position.y = cube.position[1] + Math.sin(state.clock.elapsedTime * cube.speed + cube.offset) * 0.5
         child.rotation.x = state.clock.elapsedTime * cube.speed * 0.3
@@ -155,7 +163,7 @@ export function FloatingCubes({ count = 20 }) {
 
   return (
     <group ref={groupRef}>
-      {cubes.map((cube, i) => (
+      {cubes.map((cube: CubeData, i: number) => (
         <mesh key={i} position={cube.position} scale={cube.scale}>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial
@@ -189,9 +197,9 @@ export function GridFloor() {
 export function GlowingOrbs() {
   const orbsRef = useRef<THREE.Group>(null)
 
-  useFrame((state) => {
+  useFrame((state: { clock: { elapsedTime: number } }) => {
     if (orbsRef.current) {
-      orbsRef.current.children.forEach((child, i) => {
+      orbsRef.current.children.forEach((child: THREE.Object3D, i: number) => {
         const t = state.clock.elapsedTime
         child.position.x = Math.sin(t * 0.5 + i * 1.5) * 5
         child.position.y = Math.cos(t * 0.3 + i * 1.2) * 3
@@ -208,7 +216,7 @@ export function GlowingOrbs() {
         { color: '#22c55e', size: 0.2 },
         { color: '#ef4444', size: 0.15 },
         { color: '#eab308', size: 0.2 },
-      ].map((orb, i) => (
+      ].map((orb: { color: string; size: number }, i: number) => (
         <mesh key={i}>
           <sphereGeometry args={[orb.size, 32, 32]} />
           <meshStandardMaterial
