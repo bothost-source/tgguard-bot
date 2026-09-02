@@ -4,13 +4,11 @@ import {
   Gamepad2, Puzzle, Globe, Zap, Type, Brain, Trophy, Users, Settings,
   BarChart3, Lock
 } from 'lucide-react'
+import { useGroup } from '../../context/GroupContext'
+import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
 import ToggleSwitch from '../../components/ToggleSwitch'
 import GlassButton from '../../components/GlassButton'
-
-interface Props {
-  group: { id: string; name: string } | null
-}
 
 interface GameSettings {
   enabled: boolean
@@ -34,55 +32,50 @@ const gameColors: Record<string, string> = {
   emoji: 'from-purple-500 to-violet-500',
 }
 
-export default function GamesPage({ group }: Props) {
+export default function GamesPage() {
+  const { selectedGroup } = useGroup()
   const [settings, setSettings] = useState<GameSettings | null>(null)
   const [stats, setStats] = useState<GameStats[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const token = localStorage.getItem('tgguard_token')
-
   useEffect(() => {
-    if (!group) return
+    if (!selectedGroup) return
     fetchGameData()
-  }, [group])
+  }, [selectedGroup])
 
   const fetchGameData = async () => {
-    if (!group) return
+    if (!selectedGroup) return
     setLoading(true)
     setError('')
     try {
       const [settingsRes, statsRes] = await Promise.all([
-        fetch(`/api/groups/${group.id}/games/settings`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/groups/${group.id}/games/stats`, { headers: { Authorization: `Bearer ${token}` } }),
+        api.get(`/groups/${selectedGroup.id}/games/settings`),
+        api.get(`/groups/${selectedGroup.id}/games/stats`),
       ])
-      if (settingsRes.ok) setSettings(await settingsRes.json())
-      if (statsRes.ok) setStats(await statsRes.json())
-    } catch (e) {
-      setError('Failed to load game data')
+      setSettings(settingsRes.data)
+      setStats(statsRes.data)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to load game data')
     } finally {
       setLoading(false)
     }
   }
 
   const saveSettings = async () => {
-    if (!group || !settings) return
+    if (!selectedGroup || !settings) return
     setSaving(true)
     try {
-      await fetch(`/api/groups/${group.id}/games/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(settings),
-      })
-    } catch (e) {
+      await api.put(`/groups/${selectedGroup.id}/games/settings`, settings)
+    } catch (e: any) {
       console.error('Failed to save game settings:', e)
     } finally {
       setSaving(false)
     }
   }
 
-  if (!group) {
+  if (!selectedGroup) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center h-96">
         <p className="text-white/50">Select a group to manage games</p>
