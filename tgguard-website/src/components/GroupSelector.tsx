@@ -23,7 +23,15 @@ export default function GroupSelector() {
   return (
     <div className="relative">
       <button onClick={() => setOpen(!open)} className="flex items-center gap-3 px-4 py-2.5 glass hover:bg-white/[0.06] transition-colors min-w-[200px]">
-        <div className={`w-2 h-2 rounded-full ${selectedGroup?.is_active ? 'bg-green-400' : 'bg-yellow-400'}`} />
+        <div className="w-7 h-7 rounded-lg overflow-hidden bg-white/[0.06] flex-shrink-0">
+          {selectedGroup?.avatar_url ? (
+            <img src={selectedGroup.avatar_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Group className="w-3.5 h-3.5 text-white/30" />
+            </div>
+          )}
+        </div>
         <span className="text-sm text-white font-medium flex-1 text-left truncate">{selectedGroup?.name || 'Select Group'}</span>
         <ChevronDown className={`w-4 h-4 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -39,7 +47,15 @@ export default function GroupSelector() {
               </div>
               {groups.map((group) => (
                 <button key={group.id} onClick={() => { selectGroup(group); setOpen(false) }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors ${selectedGroup?.id === group.id ? 'bg-white/[0.06]' : ''}`}>
-                  <div className={`w-2 h-2 rounded-full ${group.is_active ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                  <div className="w-7 h-7 rounded-lg overflow-hidden bg-white/[0.06] flex-shrink-0">
+                    {group.avatar_url ? (
+                      <img src={group.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Group className="w-3.5 h-3.5 text-white/30" />
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{group.name}</p>
                     <p className="text-xs text-white/30">{group.member_count.toLocaleString()} members</p>
