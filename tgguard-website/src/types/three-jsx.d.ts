@@ -1,10 +1,7 @@
-import { ThreeElements } from '@react-three/fiber'
+/// <reference types="@react-three/fiber" />
+/// <reference types="@react-three/drei" />
 
-declare module '@react-three/fiber' {
-  export interface ThreeElements {
-    // Extends JSX intrinsic elements for R3F
-  }
-}
+import { ThreeElements } from '@react-three/fiber'
 
 declare global {
   namespace JSX {
