@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-
-const API_URL = import.meta.env.VITE_API_URL || '/api'
+import api from '../lib/api'
 
 export interface User {
   id: string
@@ -37,40 +36,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('tgguard_token')
-    if (!token) {
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-
+    if (!token) { setUser(null); setIsLoading(false); return }
     try {
-      const res = await fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        setUser(data)
-      } else if (res.status === 401) {
-        localStorage.removeItem('tgguard_token')
-        setUser(null)
-      } else {
-        setUser(null)
-      }
+      const { data } = await api.get('/auth/me')
+      setUser(data)
     } catch (err) {
-      console.error('Auth refresh failed:', err)
+      localStorage.removeItem('tgguard_token')
       setUser(null)
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    refreshUser()
-  }, [refreshUser])
+  useEffect(() => { refreshUser() }, [refreshUser])
 
   const login = useCallback(() => {
-    window.location.href = `${API_URL}/auth/telegram`
+    window.location.href = `${import.meta.env.VITE_API_URL || '/api'}/auth/telegram`
   }, [])
 
   const logout = useCallback(() => {
@@ -80,16 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
