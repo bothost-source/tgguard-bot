@@ -3,12 +3,10 @@ import { motion } from 'framer-motion'
 import {
   Users, TrendingUp, TrendingDown, MessageSquare, Gamepad2
 } from 'lucide-react'
+import { useGroup } from '../../context/GroupContext'
+import api from '../../lib/api'
 import StatCard from '../../components/StatCard'
 import AnimatedCard from '../../components/AnimatedCard'
-
-interface Props {
-  group: { id: string; name: string; member_count: number } | null
-}
 
 interface AnalyticsData {
   member_count: number
@@ -19,40 +17,33 @@ interface AnalyticsData {
   game_activity: { name: string; played: number; participants: number }[]
 }
 
-export default function AnalyticsPage({ group }: Props) {
+export default function AnalyticsPage() {
+  const { selectedGroup } = useGroup()
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const token = localStorage.getItem('tgguard_token')
-
   useEffect(() => {
-    if (!group) return
+    if (!selectedGroup) return
     fetchAnalytics()
-  }, [group, period])
+  }, [selectedGroup, period])
 
   const fetchAnalytics = async () => {
-    if (!group) return
+    if (!selectedGroup) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/groups/${group.id}/analytics?period=${period}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        setData(await res.json())
-      } else {
-        setError('Failed to load analytics')
-      }
-    } catch (e) {
-      setError('Failed to load analytics')
+      const { data: resData } = await api.get(`/groups/${selectedGroup.id}/analytics?period=${period}`)
+      setData(resData)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to load analytics')
     } finally {
       setLoading(false)
     }
   }
 
-  if (!group) {
+  if (!selectedGroup) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center h-96">
         <p className="text-white/50">Select a group to view analytics</p>
@@ -87,7 +78,7 @@ export default function AnalyticsPage({ group }: Props) {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Total Members" value={data?.member_count ?? group.member_count} color="cyan" delay={0} />
+        <StatCard icon={Users} label="Total Members" value={data?.member_count ?? selectedGroup.member_count} color="cyan" delay={0} />
         <StatCard icon={TrendingUp} label="New Members" value={data?.new_members ?? 0} color="green" delay={0.1} />
         <StatCard icon={TrendingDown} label="Members Left" value={data?.members_left ?? 0} color="red" delay={0.2} />
         <StatCard icon={MessageSquare} label="Messages" value={data?.messages ?? 0} color="purple" delay={0.3} />
