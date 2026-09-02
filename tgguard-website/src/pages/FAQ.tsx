@@ -9,7 +9,7 @@ const faqs = [
   { q: 'How do I add TGGuard to my group?', a: 'Click "Add Telegram Group" in your dashboard, add TGGuard as an administrator, then return and click "Check Group" to verify.' },
   { q: 'Why does TGGuard need administrator permissions?', a: 'TGGuard needs admin permissions to delete spam, restrict/ban users, pin welcome messages, and perform moderation actions.' },
   { q: 'How does protection work?', a: 'Once configured, TGGuard monitors messages in real-time. When a message triggers a filter, TGGuard performs your configured action.' },
-  { q: 'How do word filters work?', a: 'You add words or phrases to your group's filter list. Each group has its own independent filter list.' },
+  { q: 'How do word filters work?', a: 'You add words or phrases to your groups filter list. Each group has its own independent filter list.' },
   { q: 'How does verification work?', a: 'When a new member joins, TGGuard sends a verification challenge. They must complete it within the timeout period.' },
   { q: 'How do welcome messages work?', a: 'You can choose between a default welcome or create a custom one with text, media, and buttons.' },
   { q: 'How do reports work?', a: 'Group members can report messages or users. Reports are sent privately to authorized administrators.' },
