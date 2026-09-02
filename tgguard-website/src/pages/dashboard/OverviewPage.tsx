@@ -1,25 +1,21 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  Shield, Users, AlertTriangle, Trash2, Clock, Lock,
-  MessageSquare, Link2
-} from 'lucide-react'
-import StatCard from '../../components/StatCard'
-import ToggleSwitch from '../../components/ToggleSwitch'
+import { Shield, Users, AlertTriangle, MessageSquare, Activity } from 'lucide-react'
+import { useGroup } from '../../context/GroupContext'
+import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
+import Skeleton from '../../components/Skeleton'
 
-interface Props {
-  group: { id: string; name: string; chat_id: string; member_count: number; is_active: boolean } | null
-}
-
-interface DashboardStats {
+interface Stats {
   member_count: number
   warnings_today: number
   deleted_messages_today: number
   pending_reports: number
+  bot_is_admin: boolean
+  is_active: boolean
 }
 
-interface ActivityLog {
+interface Log {
   id: string
   time: string
   user: string
@@ -27,180 +23,126 @@ interface ActivityLog {
   reason: string
 }
 
-export default function OverviewPage({ group }: Props) {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [logs, setLogs] = useState<ActivityLog[]>([])
-  const [settings, setSettings] = useState({
-    protection: true,
-    verification: true,
-    antiSpam: true,
-    antiLink: true,
-  })
-  const [loading, setLoading] = useState(false)
+export default function OverviewPage() {
+  const { selectedGroup } = useGroup()
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [logs, setLogs] = useState<Log[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const token = localStorage.getItem('tgguard_token')
-
   useEffect(() => {
-    if (!group) return
-    fetchDashboardData()
-  }, [group])
-
-  const fetchDashboardData = async () => {
-    if (!group) return
+    if (!selectedGroup) { setLoading(false); return }
     setLoading(true)
     setError('')
-    try {
-      const [statsRes, logsRes] = await Promise.all([
-        fetch(`/api/groups/${group.id}/stats`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/groups/${group.id}/logs?limit=10`, { headers: { Authorization: `Bearer ${token}` } }),
-      ])
-      if (statsRes.ok) setStats(await statsRes.json())
-      if (logsRes.ok) setLogs(await logsRes.json())
-    } catch (e) {
-      setError('Failed to load dashboard data')
-    } finally {
-      setLoading(false)
-    }
-  }
+    Promise.all([
+      api.get(`/groups/${selectedGroup.id}/stats`).then(r => setStats(r.data)),
+      api.get(`/groups/${selectedGroup.id}/logs?limit=5`).then(r => setLogs(r.data)),
+    ]).catch((err) => {
+      setError(err.response?.data?.error || 'Failed to load dashboard data')
+    }).finally(() => setLoading(false))
+  }, [selectedGroup])
 
-  const updateSetting = async (key: string, value: boolean) => {
-    if (!group) return
-    setSettings(prev => ({ ...prev, [key]: value }))
-    try {
-      await fetch(`/api/groups/${group.id}/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ [key]: value }),
-      })
-    } catch (e) {
-      console.error('Failed to update setting:', e)
-    }
-  }
-
-  if (!group) {
+  if (!selectedGroup) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-96 text-center">
-        <div className="w-20 h-20 rounded-2xl glass flex items-center justify-center mb-4">
-          <Shield className="w-10 h-10 text-white/30" />
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Shield className="w-12 h-12 text-white/10 mx-auto mb-4" />
+          <p className="text-white/40">No group selected. Add a Telegram group to get started.</p>
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">No Group Selected</h2>
-        <p className="text-white/50">Add a Telegram group to get started with TGGuard</p>
-      </motion.div>
+      </div>
     )
   }
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
-      {error && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>
-      )}
+  const statCards = [
+    { icon: Users, label: 'Members', value: stats?.member_count ?? 0, suffix: '' },
+    { icon: Shield, label: 'Protection', value: stats?.is_active ? 'Active' : 'Inactive', suffix: '', isStatus: true },
+    { icon: AlertTriangle, label: 'Warnings Today', value: stats?.warnings_today ?? 0, suffix: '' },
+    { icon: MessageSquare, label: 'Deleted Today', value: stats?.deleted_messages_today ?? 0, suffix: '' },
+  ]
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">TGGuard Dashboard</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <div className={`w-2 h-2 rounded-full ${group.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-white/50">{group.name}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-white/50">Protection:</span>
-          <span className={`text-sm font-semibold ${group.is_active ? 'text-green-400' : 'text-red-400'}`}>
-            {group.is_active ? 'Active' : 'Inactive'}
-          </span>
-        </div>
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard</h1>
+        <p className="text-white/40 text-sm mt-1">Overview of {selectedGroup.name}</p>
       </div>
 
-      {loading && !stats ? (
-        <div className="flex items-center justify-center h-48">
-          <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+      {error && (
+        <div className="glass p-4 border-red-500/20 bg-red-500/5">
+          <p className="text-sm text-red-400">{error}</p>
         </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={Users} label="Members" value={stats?.member_count ?? group.member_count} color="cyan" delay={0} />
-            <StatCard icon={AlertTriangle} label="Warnings Today" value={stats?.warnings_today ?? 0} color="yellow" delay={0.1} />
-            <StatCard icon={Trash2} label="Deleted Messages" value={stats?.deleted_messages_today ?? 0} color="red" delay={0.2} />
-            <StatCard icon={Clock} label="Pending Reports" value={stats?.pending_reports ?? 0} color="purple" delay={0.3} />
-          </div>
-
-          <AnimatedCard>
-            <h3 className="text-lg font-bold text-white mb-4">Quick Controls</h3>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-cyan-400" />
-                  <div>
-                    <p className="text-sm font-medium text-white">Protection</p>
-                    <p className="text-xs text-white/40">All moderation features</p>
-                  </div>
-                </div>
-                <ToggleSwitch checked={settings.protection} onChange={(v) => updateSetting('protection', v)} />
-              </div>
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5">
-                <div className="flex items-center gap-3">
-                  <Lock className="w-5 h-5 text-purple-400" />
-                  <div>
-                    <p className="text-sm font-medium text-white">Verification</p>
-                    <p className="text-xs text-white/40">New member challenges</p>
-                  </div>
-                </div>
-                <ToggleSwitch checked={settings.verification} onChange={(v) => updateSetting('verification', v)} />
-              </div>
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5">
-                <div className="flex items-center gap-3">
-                  <MessageSquare className="w-5 h-5 text-green-400" />
-                  <div>
-                    <p className="text-sm font-medium text-white">Anti-Spam</p>
-                    <p className="text-xs text-white/40">Spam detection & removal</p>
-                  </div>
-                </div>
-                <ToggleSwitch checked={settings.antiSpam} onChange={(v) => updateSetting('antiSpam', v)} />
-              </div>
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5">
-                <div className="flex items-center gap-3">
-                  <Link2 className="w-5 h-5 text-red-400" />
-                  <div>
-                    <p className="text-sm font-medium text-white">Anti-Link</p>
-                    <p className="text-xs text-white/40">Link filtering</p>
-                  </div>
-                </div>
-                <ToggleSwitch checked={settings.antiLink} onChange={(v) => updateSetting('antiLink', v)} />
-              </div>
-            </div>
-          </AnimatedCard>
-
-          <AnimatedCard delay={0.2}>
-            <h3 className="text-lg font-bold text-white mb-4">Recent Activity</h3>
-            {logs.length === 0 ? (
-              <p className="text-sm text-white/40 text-center py-8">No recent activity</p>
-            ) : (
-              <div className="space-y-3">
-                {logs.map((log) => (
-                  <motion.div
-                    key={log.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
-                  >
-                    <span className="text-xs text-white/30 font-mono w-12">{log.time}</span>
-                    <span className="text-sm text-white/70 w-28">{log.user}</span>
-                    <span className="text-sm text-white font-medium flex-1">{log.action}</span>
-                    <span className="text-xs text-white/40">{log.reason}</span>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </AnimatedCard>
-        </>
       )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28" />
+          ))
+        ) : (
+          statCards.map((stat, i) => (
+            <AnimatedCard key={stat.label} delay={i * 0.05} className="!p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                  <stat.icon className="w-4 h-4 text-white/60" />
+                </div>
+                <span className="text-xs text-white/30 uppercase tracking-wider">{stat.label}</span>
+              </div>
+              <p className={`text-2xl font-bold font-mono ${stat.isStatus && stats?.is_active ? 'text-green-400' : 'text-white'}`}>
+                {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
+              </p>
+            </AnimatedCard>
+          ))
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <AnimatedCard className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+            <span className="text-xs text-white/30 font-mono">Today</span>
+          </div>
+          {loading ? (
+            <Skeleton className="h-48" />
+          ) : logs.length === 0 ? (
+            <div className="py-8 text-center">
+              <Activity className="w-8 h-8 text-white/10 mx-auto mb-2" />
+              <p className="text-sm text-white/30">No activity yet</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {logs.map((log) => (
+                <div key={log.id} className="flex items-center gap-4 py-3 border-b border-white/[0.04] last:border-0">
+                  <span className="text-xs text-white/30 font-mono w-12">{log.time}</span>
+                  <span className="text-sm text-white/60 w-24 truncate">{log.user}</span>
+                  <span className="text-sm text-white flex-1">{log.action}</span>
+                  <span className="text-xs text-white/30">{log.reason}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </AnimatedCard>
+
+        <AnimatedCard>
+          <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
+          <div className="space-y-3">
+            {[
+              { icon: Shield, label: 'Protection', desc: 'Configure anti-spam and filters', color: 'text-cyan-400' },
+              { icon: MessageSquare, label: 'Welcome', desc: 'Set up welcome messages', color: 'text-green-400' },
+              { icon: AlertTriangle, label: 'Reports', desc: 'Review member reports', color: 'text-yellow-400' },
+            ].map((action, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/[0.03] transition-colors cursor-pointer group">
+                <div className={`w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0 ${action.color}`}>
+                  <action.icon className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white group-hover:text-white/80">{action.label}</p>
+                  <p className="text-xs text-white/30">{action.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AnimatedCard>
+      </div>
     </motion.div>
   )
 }
