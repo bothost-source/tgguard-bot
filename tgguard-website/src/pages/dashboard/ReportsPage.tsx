@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Eye, AlertTriangle, UserX, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle, XCircle, Eye, MessageSquare } from 'lucide-react'
+import { useGroup } from '../../context/GroupContext'
+import api from '../../lib/api'
 import AnimatedCard from '../../components/AnimatedCard'
-import GlassButton from '../../components/GlassButton'
-
-interface Props {
-  group: { id: string; name: string } | null
-}
+import Skeleton from '../../components/Skeleton'
 
 interface Report {
   id: string
@@ -18,159 +16,127 @@ interface Report {
   timestamp: string
 }
 
-const reasonColors: Record<string, string> = {
-  'Spam': 'bg-yellow-500/20 text-yellow-400',
-  'Harassment': 'bg-red-500/20 text-red-400',
-  'Scam/suspicious content': 'bg-purple-500/20 text-purple-400',
-  'Unwanted advertising': 'bg-orange-500/20 text-orange-400',
-  'Other': 'bg-white/10 text-white/50',
-}
-
-export default function ReportsPage({ group }: Props) {
+export default function ReportsPage() {
+  const { selectedGroup } = useGroup()
   const [reports, setReports] = useState<Report[]>([])
-  const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all')
-
-  const token = localStorage.getItem('tgguard_token')
-
-  useEffect(() => {
-    if (!group) return
-    fetchReports()
-  }, [group])
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const fetchReports = async () => {
-    if (!group) return
+    if (!selectedGroup) return
     setLoading(true)
-    setError('')
     try {
-      const res = await fetch(`/api/groups/${group.id}/reports`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        setReports(await res.json())
-      } else {
-        setError('Failed to load reports')
-      }
-    } catch (e) {
-      setError('Failed to load reports')
+      const { data } = await api.get(`/groups/${selectedGroup.id}/reports`)
+      setReports(data)
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load reports')
     } finally {
       setLoading(false)
     }
   }
 
-  const filtered = filter === 'all' ? reports : reports.filter(r => r.status === filter)
+  useEffect(() => { fetchReports() }, [selectedGroup])
 
-  const handleAction = async (id: string, action: string) => {
-    if (!group) return
+  const handleAction = async (reportId: string, action: string) => {
+    if (!selectedGroup) return
+    setActionLoading(reportId)
     try {
-      const res = await fetch(`/api/groups/${group.id}/reports/${id}/${action}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        setReports(prev => prev.map(r => r.id === id
-          ? { ...r, status: action === 'dismiss' ? 'dismissed' : 'resolved' }
-          : r
-        ))
-      }
-    } catch (e) {
-      console.error('Failed to process report:', e)
+      await api.post(`/groups/${selectedGroup.id}/reports/${reportId}/${action}`)
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: action === 'dismiss' ? 'dismissed' : 'resolved' } : r))
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to process report')
+    } finally {
+      setActionLoading(null)
     }
   }
 
-  if (!group) {
-    return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center h-96">
-        <p className="text-white/50">Select a group to view reports</p>
-      </motion.div>
-    )
-  }
+  const filtered = reports.filter(r => filter === 'all' || r.status === filter)
 
-  if (loading && reports.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+  if (!selectedGroup) {
+    return <div className="p-6 flex items-center justify-center min-h-[400px]"><p className="text-white/40">Select a group first</p></div>
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-      {error && <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
-
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Reports</h1>
-        <div className="flex gap-2">
-          {(['all', 'pending', 'resolved', 'dismissed'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
-                filter === f ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-white/50 hover:bg-white/10'
-              }`}>
-              {f}
-            </button>
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Reports</h1>
+          <p className="text-white/40 text-sm mt-1">Manage member reports</p>
+        </div>
+        <span className="text-xs px-3 py-1.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+          {reports.filter(r => r.status === 'pending').length} pending
+        </span>
+      </div>
+
+      {error && <div className="glass p-4 border-red-500/20 bg-red-500/5"><p className="text-sm text-red-400">{error}</p></div>}
+
+      <div className="flex gap-2">
+        {['all', 'pending', 'resolved', 'dismissed'].map((f) => (
+          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${filter === f ? 'bg-white text-black' : 'bg-white/[0.06] text-white/60 hover:bg-white/[0.1]'}`}>
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center">
+          <MessageSquare className="w-10 h-10 text-white/10 mx-auto mb-3" />
+          <p className="text-white/30">No reports found</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((report) => (
+            <AnimatedCard key={report.id} className="!p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${report.status === 'pending' ? 'bg-yellow-500/10' : report.status === 'resolved' ? 'bg-green-500/10' : 'bg-white/[0.06]'}`}>
+                    {report.status === 'pending' ? <AlertTriangle className="w-4 h-4 text-yellow-400" /> : report.status === 'resolved' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <XCircle className="w-4 h-4 text-white/30" />}
+                  </div>
+                  <div>
+                    <p className="text-sm text-white font-medium">{report.reason}</p>
+                    <p className="text-xs text-white/30">Reported by {report.reportedBy} • {report.reportedUser}</p>
+                  </div>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full ${report.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : report.status === 'resolved' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-white/[0.06] text-white/30 border border-white/[0.08]'}`}>
+                  {report.status}
+                </span>
+              </div>
+
+              {report.messagePreview && (
+                <div className="glass p-3 rounded-lg mb-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <MessageSquare className="w-3 h-3 text-white/30" />
+                    <span className="text-xs text-white/30">Reported message</span>
+                  </div>
+                  <p className="text-sm text-white/60">{report.messagePreview}</p>
+                </div>
+              )}
+
+              {report.status === 'pending' && (
+                <div className="flex gap-2">
+                  <button onClick={() => handleAction(report.id, 'warn')} disabled={actionLoading === report.id} className="btn-ghost text-xs">
+                    <AlertTriangle className="w-3 h-3" />Warn
+                  </button>
+                  <button onClick={() => handleAction(report.id, 'restrict')} disabled={actionLoading === report.id} className="btn-ghost text-xs">
+                    <Eye className="w-3 h-3" />Restrict
+                  </button>
+                  <button onClick={() => handleAction(report.id, 'remove')} disabled={actionLoading === report.id} className="btn-ghost text-xs text-red-400/60 hover:text-red-400">
+                    <XCircle className="w-3 h-3" />Remove
+                  </button>
+                  <button onClick={() => handleAction(report.id, 'dismiss')} disabled={actionLoading === report.id} className="btn-ghost text-xs ml-auto">
+                    <CheckCircle className="w-3 h-3" />Dismiss
+                  </button>
+                </div>
+              )}
+              <p className="text-xs text-white/20 mt-2">{report.timestamp}</p>
+            </AnimatedCard>
           ))}
         </div>
-      </div>
-
-      <div className="space-y-4">
-        {filtered.map((report, i) => (
-          <AnimatedCard key={report.id} delay={i * 0.05}>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className={`px-2 py-1 rounded-lg text-xs font-medium ${reasonColors[report.reason] || 'bg-white/10 text-white/50'}`}>
-                    {report.reason}
-                  </span>
-                  <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                    report.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                    report.status === 'resolved' ? 'bg-green-500/20 text-green-400' :
-                    'bg-white/10 text-white/50'
-                  }`}>
-                    {report.status}
-                  </span>
-                  <span className="text-xs text-white/30">{report.timestamp}</span>
-                </div>
-                <p className="text-sm text-white/70 mb-1">
-                  <span className="text-white/50">Reported:</span> <span className="text-white font-medium">{report.reportedUser}</span>
-                  <span className="text-white/50 mx-2">by</span>
-                  <span className="text-white font-medium">{report.reportedBy}</span>
-                </p>
-                <div className="p-3 rounded-xl bg-white/5 mt-2">
-                  <p className="text-sm text-white/50 italic">"{report.messagePreview}"</p>
-                </div>
-              </div>
-            </div>
-
-            {report.status === 'pending' && (
-              <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
-                <GlassButton variant="ghost" size="sm" onClick={() => handleAction(report.id, 'view')}>
-                  <Eye className="w-4 h-4 mr-1" />View
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" onClick={() => handleAction(report.id, 'warn')}>
-                  <AlertTriangle className="w-4 h-4 mr-1" />Warn
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" onClick={() => handleAction(report.id, 'restrict')}>
-                  <UserX className="w-4 h-4 mr-1" />Restrict
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" onClick={() => handleAction(report.id, 'remove')}>
-                  <UserX className="w-4 h-4 mr-1" />Remove
-                </GlassButton>
-                <GlassButton variant="ghost" size="sm" className="ml-auto" onClick={() => handleAction(report.id, 'dismiss')}>
-                  <X className="w-4 h-4 mr-1" />Dismiss
-                </GlassButton>
-              </div>
-            )}
-          </AnimatedCard>
-        ))}
-
-        {filtered.length === 0 && !loading && (
-          <div className="text-center py-12">
-            <ShieldCheck className="w-12 h-12 text-white/20 mx-auto mb-3" />
-            <p className="text-white/40">No {filter !== 'all' ? filter : ''} reports found</p>
-          </div>
-        )}
-      </div>
+      )}
     </motion.div>
   )
 }
