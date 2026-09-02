@@ -45,7 +45,7 @@ export default function GroupSelector() {
                 <Group className="w-3.5 h-3.5" />
                 My Groups
               </div>
-              {groups.map((group) => (
+              {groups.map((group: GroupType) => (
                 <button key={group.id} onClick={() => { selectGroup(group); setOpen(false) }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors ${selectedGroup?.id === group.id ? 'bg-white/[0.06]' : ''}`}>
                   <div className="w-7 h-7 rounded-lg overflow-hidden bg-white/[0.06] flex-shrink-0">
                     {group.avatar_url ? (
