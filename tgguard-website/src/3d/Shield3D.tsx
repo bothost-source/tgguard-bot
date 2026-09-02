@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Float, MeshTransmissionMaterial, Text } from '@react-three/fiber'
+import { Float, MeshTransmissionMaterial, Text } from '@react-three/drei'
 import * as THREE from 'three'
 
 interface CubeData {
