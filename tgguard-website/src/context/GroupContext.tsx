@@ -9,6 +9,7 @@ export interface Group {
   is_active: boolean
   bot_is_admin: boolean
   is_verified: boolean
+  avatar_url?: string
 }
 
 interface GroupContextType {
