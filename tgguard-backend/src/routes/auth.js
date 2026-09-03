@@ -9,7 +9,6 @@ const router = express.Router()
 // Helper to get frontend URL with fallback
 const getFrontendUrl = () => {
   const url = process.env.FRONTEND_URL || 'http://localhost:3000'
-  // Remove trailing slash if present
   return url.replace(/\/$/, '')
 }
 
@@ -143,5 +142,7 @@ router.post('/refresh', async (req, res) => {
     res.status(401).json({ error: 'Invalid token' })
   }
 })
+
+console.log('✅ auth.js loaded successfully — routes: /telegram, /me, /refresh')
 
 export default router
