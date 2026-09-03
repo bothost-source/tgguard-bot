@@ -3,10 +3,12 @@ import { motion } from 'framer-motion'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { Shield, MessageCircle, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import GlassButton from '../components/GlassButton'
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://tgguard-bot.onrender.com/api'
+const TELEGRAM_AUTH_URL = `${API_URL}/auth/telegram`
 
 export default function LoginPage() {
-  const { login, user, isLoading, refreshUser } = useAuth()
+  const { user, isLoading, refreshUser } = useAuth()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
@@ -54,10 +56,14 @@ export default function LoginPage() {
             <p className="text-white/40 text-sm">Sign in to manage your Telegram communities</p>
           </div>
           <div className="space-y-4">
-            <GlassButton variant="primary" size="lg" className="w-full justify-center" onClick={login}>
+            {/* Use <a> tag for Telegram auth — most reliable in all browsers/WebViews */}
+            <a
+              href={TELEGRAM_AUTH_URL}
+              className="inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] bg-white text-black hover:bg-white/90 px-6 py-3 text-base w-full"
+            >
               <MessageCircle className="w-5 h-5" />
               Continue with Telegram
-            </GlassButton>
+            </a>
             <p className="text-center text-xs text-white/30 leading-relaxed">
               By signing in, you agree to our Terms of Service and Privacy Policy.
             </p>
