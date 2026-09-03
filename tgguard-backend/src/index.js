@@ -78,17 +78,44 @@ app.use('/api/owner', ownerRoutes)
 app.use(notFoundHandler)
 app.use(errorHandler)
 
+// ── STARTUP: Log all registered routes ──
+function logRoutes() {
+  const routes = []
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      const methods = Object.keys(middleware.route.methods).map(m => m.toUpperCase()).join(',')
+      routes.push(`${methods} ${middleware.route.path}`)
+    } else if (middleware.name === 'router' && middleware.handle?.stack) {
+      const basePath = middleware.regexp?.toString().replace('\\^', '').replace('\\/?(?=\\/|$)', '') || ''
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          const methods = Object.keys(handler.route.methods).map(m => m.toUpperCase()).join(',')
+          const fullPath = basePath + handler.route.path
+          routes.push(`${methods} ${fullPath}`)
+        }
+      })
+    }
+  })
+  console.log('\n📋 REGISTERED ROUTES:')
+  routes.forEach(r => console.log(`   ${r}`))
+  console.log('')
+}
+
 // Start server
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => {
-  console.log(`TGGuard backend running on port ${PORT}`)
+  console.log(`\n🚀 TGGuard backend running on port ${PORT}`)
+  console.log(`   Health:  http://localhost:${PORT}/api/health`)
+  console.log(`   Auth:    http://localhost:${PORT}/api/auth/telegram`)
+  console.log(`   Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`)
+  logRoutes()
 })
 
 // Start bot
 const botMode = process.env.BOT_MODE || 'polling'
 const botStarted = await startBot(botMode)
 if (botStarted) {
-  console.log(`TGGuard bot started in ${botMode} mode`)
+  console.log(`🤖 TGGuard bot started in ${botMode} mode`)
 } else {
-  console.error('WARNING: Bot failed to start. Check BOT_TOKEN configuration.')
+  console.error('⚠️  WARNING: Bot failed to start. Check BOT_TOKEN configuration.')
 }
