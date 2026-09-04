@@ -6,39 +6,27 @@ import { verifyTelegramHash, isAuthRecent } from '../middleware/auth.js'
 
 const router = express.Router()
 
-// Helper to get frontend URL with fallback
 const getFrontendUrl = () => {
   const url = process.env.FRONTEND_URL || 'http://localhost:3000'
   return url.replace(/\/$/, '')
 }
 
+// ── Existing Telegram OAuth endpoint (keep for direct access) ──
 router.get('/telegram', async (req, res) => {
   try {
     const { id, first_name, username, photo_url, auth_date, hash } = req.query
-
     if (!id || !hash || !auth_date) {
-      console.error('Missing Telegram auth fields:', req.query)
       return res.redirect(`${getFrontendUrl()}/login?error=missing_fields`)
     }
-
     if (!verifyTelegramHash(req.query, process.env.BOT_TOKEN)) {
-      console.error('Telegram hash verification failed for user:', id)
-      await db.collection('system_logs').insertOne({
-        level: 'warning', message: 'Failed Telegram auth hash verification',
-        ip: req.ip, user_agent: req.headers['user-agent'], component: 'auth', created_at: new Date()
-      })
       return res.redirect(`${getFrontendUrl()}/login?error=invalid_auth`)
     }
-
     if (!isAuthRecent(auth_date)) {
-      console.error('Telegram auth expired for user:', id)
       return res.redirect(`${getFrontendUrl()}/login?error=auth_expired`)
     }
-
     const telegramId = BigInt(id)
     const isOwner = telegramId.toString() === process.env.OWNER_TELEGRAM_ID
     let user = await db.collection('users').findOne({ telegram_id: telegramId })
-
     if (!user) {
       const result = await db.collection('users').insertOne({
         telegram_id: telegramId, username: username || null, first_name: first_name || null,
@@ -46,10 +34,6 @@ router.get('/telegram', async (req, res) => {
         is_active: true, last_login: new Date(), created_at: new Date(), updated_at: new Date()
       })
       user = await db.collection('users').findOne({ _id: result.insertedId })
-      await db.collection('system_logs').insertOne({
-        level: 'info', message: `New user registered: ${username || first_name || id}`,
-        user_id: user._id, component: 'auth', created_at: new Date()
-      })
     } else {
       await db.collection('users').updateOne(
         { _id: user._id },
@@ -57,30 +41,85 @@ router.get('/telegram', async (req, res) => {
       )
       user = await db.collection('users').findOne({ _id: user._id })
     }
-
-    if (!process.env.JWT_SECRET) {
-      console.error('JWT_SECRET not configured')
-      return res.redirect(`${getFrontendUrl()}/login?error=server_error`)
-    }
-
     const token = jwt.sign(
       { userId: user._id.toString(), role: user.role, telegramId: user.telegram_id.toString() },
       process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     )
-
-    await db.collection('system_logs').insertOne({
-      level: 'info', message: `User logged in: ${user.username || user.first_name || user.telegram_id}`,
-      user_id: user._id, component: 'auth', created_at: new Date()
-    })
-
-    res.redirect(`${getFrontendUrl()}/login?token=${token}`)
+    res.redirect(`${getFrontendUrl()}/dashboard?token=${token}`)
   } catch (err) {
     console.error('Telegram auth error:', err)
-    await db.collection('system_logs').insertOne({
-      level: 'error', message: `Auth error: ${err.message}`, stack: err.stack,
-      component: 'auth', created_at: new Date()
-    })
     res.redirect(`${getFrontendUrl()}/login?error=auth_failed`)
+  }
+})
+
+// ── NEW: Bot-generated magic link endpoint ──
+router.post('/bot-token', async (req, res) => {
+  try {
+    const { token: botToken } = req.body
+    if (!botToken) {
+      return res.status(400).json({ error: 'Missing token' })
+    }
+    if (!process.env.BOT_TOKEN) {
+      return res.status(500).json({ error: 'Server configuration error' })
+    }
+
+    // Verify the bot-generated token
+    const decoded = jwt.verify(botToken, process.env.BOT_TOKEN) as any
+    const { telegramId, groupId } = decoded
+
+    if (!telegramId) {
+      return res.status(400).json({ error: 'Invalid token' })
+    }
+
+    const tgId = BigInt(telegramId)
+    const isOwner = tgId.toString() === process.env.OWNER_TELEGRAM_ID
+
+    // Find or create user
+    let user = await db.collection('users').findOne({ telegram_id: tgId })
+    if (!user) {
+      const result = await db.collection('users').insertOne({
+        telegram_id: tgId, username: null, first_name: null,
+        avatar_url: null, role: isOwner ? 'owner' : 'community_admin',
+        is_active: true, last_login: new Date(), created_at: new Date(), updated_at: new Date()
+      })
+      user = await db.collection('users').findOne({ _id: result.insertedId })
+    } else {
+      await db.collection('users').updateOne(
+        { _id: user._id },
+        { $set: { last_login: new Date(), updated_at: new Date() } }
+      )
+      user = await db.collection('users').findOne({ _id: user._id })
+    }
+
+    // If groupId provided, ensure group exists and user has membership
+    if (groupId) {
+      const group = await db.collection('groups').findOne({ chat_id: BigInt(groupId) })
+      if (group) {
+        const membership = await db.collection('group_memberships').findOne({
+          user_id: user._id, group_id: group._id
+        })
+        if (!membership) {
+          await db.collection('group_memberships').insertOne({
+            user_id: user._id, group_id: group._id,
+            role: 'admin', created_at: new Date()
+          })
+        }
+      }
+    }
+
+    // Generate auth token
+    const authToken = jwt.sign(
+      { userId: user._id.toString(), role: user.role, telegramId: user.telegram_id.toString() },
+      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    )
+
+    res.json({ token: authToken, user: {
+      id: user._id.toString(), telegram_id: user.telegram_id.toString(),
+      username: user.username, first_name: user.first_name, role: user.role
+    }})
+  } catch (err) {
+    console.error('Bot token auth error:', err)
+    res.status(401).json({ error: 'Invalid or expired token' })
   }
 })
 
@@ -90,23 +129,19 @@ router.get('/me', async (req, res) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'No token provided' })
     }
-
     const token = authHeader.replace('Bearer ', '')
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ error: 'Server configuration error' })
     }
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await db.collection('users').findOne(
       { _id: new ObjectId(decoded.userId) },
       { projection: { password: 0 } }
     )
     if (!user) return res.status(404).json({ error: 'User not found' })
-
     const memberships = await db.collection('group_memberships').find({ user_id: user._id }).toArray()
     const groupIds = memberships.map(m => m.group_id)
     const groups = groupIds.length > 0 ? await db.collection('groups').find({ _id: { $in: groupIds } }).toArray() : []
-
     res.json({
       id: user._id.toString(), telegram_id: user.telegram_id.toString(),
       username: user.username, first_name: user.first_name, role: user.role,
@@ -127,12 +162,10 @@ router.post('/refresh', async (req, res) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'No token provided' })
     }
-
     const token = authHeader.replace('Bearer ', '')
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true })
     const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) })
     if (!user) return res.status(404).json({ error: 'User not found' })
-
     const newToken = jwt.sign(
       { userId: user._id.toString(), role: user.role, telegramId: user.telegram_id.toString() },
       process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -142,7 +175,5 @@ router.post('/refresh', async (req, res) => {
     res.status(401).json({ error: 'Invalid token' })
   }
 })
-
-console.log('✅ auth.js loaded successfully — routes: /telegram, /me, /refresh')
 
 export default router
