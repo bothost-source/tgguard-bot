@@ -2,10 +2,13 @@ import { Telegraf } from 'telegraf'
 import { db } from '../models/db.js'
 import { ObjectId } from 'mongodb'
 import * as tg from './telegram.js'
+import jwt from 'jsonwebtoken'  // ─── NEW: import jwt ───
 
 const BOT_TOKEN = process.env.BOT_TOKEN
 let bot = null
 let isRunning = false
+
+const groupAdders = new Map()
 
 export function initBot() {
   if (!BOT_TOKEN) {
@@ -87,6 +90,9 @@ Tap below to get started.`
         case 'speed_quiz': await startGame(ctx, 'speed'); break
         case 'missing_letters': await startGame(ctx, 'letters'); break
         case 'emoji_challenge': await startGame(ctx, 'emoji'); break
+        case 'dashboard_button':
+          await handleDashboardButton(ctx)
+          break
         default:
           if (data.startsWith('game_')) await handleGameCallback(ctx, data)
           else if (data.startsWith('verify_')) await handleVerification(ctx, data)
@@ -119,6 +125,7 @@ Tap below to get started.`
         { chat_id: BigInt(chatId) },
         { $set: { is_active: false, bot_is_admin: false, updated_at: new Date() } }
       )
+      groupAdders.delete(chatId.toString())
       return
     }
     await db.collection('groups').updateOne(
@@ -151,6 +158,7 @@ Tap below to get started.`
         { _id: group._id },
         { $set: { is_active: false, bot_is_admin: false, updated_at: new Date() } }
       )
+      groupAdders.delete(chatId.toString())
     }
   })
 
@@ -240,6 +248,39 @@ Tap below to get started.`
   })
 
   return bot
+}
+
+// ─── NEW: Handle dashboard button clicks ───
+async function handleDashboardButton(ctx) {
+  const chatId = ctx.chat?.id
+  const userId = ctx.from.id
+  const chatIdStr = chatId?.toString()
+
+  if (!chatIdStr || !groupAdders.has(chatIdStr)) {
+    await ctx.answerCbQuery('❌ Dashboard access unavailable.', { show_alert: true })
+    return
+  }
+
+  const adder = groupAdders.get(chatIdStr)
+  if (userId === adder.userId) {
+    // The person who added the bot can open the link
+    const token = jwt.sign(
+      { telegramId: adder.userId.toString(), groupId: chatId.toString() },
+      process.env.BOT_TOKEN,
+      { expiresIn: '7d' }
+    )
+    const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
+    await ctx.answerCbQuery('✅ Opening dashboard...')
+    await ctx.reply('🌐 Your Dashboard:', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
+        ]
+      }
+    })
+  } else {
+    await ctx.answerCbQuery('🚫 Not Allowed — Only the person who added the bot can access this.', { show_alert: true })
+  }
 }
 
 // MENU FUNCTIONS
@@ -398,6 +439,17 @@ async function handleBotAdded(ctx, chatId) {
   const perms = await tg.getBotPermissions(chatId)
   const existing = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
 
+  // ─── NEW: Detect who added the bot ───
+  let adder = null
+  if (ctx.message && ctx.message.from) {
+    adder = {
+      userId: ctx.message.from.id,
+      username: ctx.message.from.username,
+      firstName: ctx.message.from.first_name
+    }
+    groupAdders.set(chatId.toString(), adder)
+  }
+
   if (existing) {
     await db.collection('groups').updateOne(
       { _id: existing._id },
@@ -430,11 +482,36 @@ async function handleBotAdded(ctx, chatId) {
     })
   }
 
+  // ─── NEW: Send DM to the person who added the bot with JWT token ───
+  if (adder) {
+    try {
+      const token = jwt.sign(
+        { telegramId: adder.userId.toString(), groupId: chatId.toString() },
+        process.env.BOT_TOKEN,
+        { expiresIn: '7d' }
+      )
+      const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
+      await tg.sendMessage(adder.userId, `✅ TGGuard is active in *${chat.title || 'your group'}*!
+
+Manage settings: ${dashboardUrl}`, {
+        parse_mode: 'Markdown'
+      })
+    } catch (dmErr) {
+      console.error('Failed to send DM to bot adder:', dmErr.message)
+    }
+  }
+
   if (perms?.is_admin) {
+    // ─── NEW: Group message with restricted dashboard button ───
     await tg.sendMessage(chatId, `✅ TGGuard has been added!
 
-Visit the dashboard to configure protection.
-${process.env.FRONTEND_URL}`)
+Visit the dashboard to configure protection.`, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🌐 Open Dashboard', callback_data: 'dashboard_button' }]
+        ]
+      }
+    })
   } else {
     await tg.sendMessage(chatId, `⚠️ TGGuard needs administrator permissions.
 
