@@ -69,6 +69,32 @@ export default function LandingPage() {
         </motion.div>
       </motion.section>
 
+      {/* ─── NEW: Stats Section (uses the `stats` array) ─── */}
+      <section className="relative z-10 py-16 px-4 border-y border-white/[0.04]">
+        <div className="max-w-6xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true }} 
+            className="grid grid-cols-2 md:grid-cols-4 gap-8"
+          >
+            {stats.map((stat, i) => (
+              <motion.div 
+                key={stat.label} 
+                initial={{ opacity: 0, y: 20 }} 
+                whileInView={{ opacity: 1, y: 0 }} 
+                viewport={{ once: true }} 
+                transition={{ delay: i * 0.1 }}
+                className="text-center"
+              >
+                <div className="text-3xl md:text-4xl font-bold gradient-text mb-2">{stat.value}</div>
+                <div className="text-sm text-white/40">{stat.label}</div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
       {/* How It Works - Updated for bot-first flow */}
       <section className="relative z-10 py-24 px-4 border-y border-white/[0.04]">
         <div className="max-w-4xl mx-auto">
@@ -95,8 +121,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* ... rest of landing page stays the same ... */}
 
       <section className="relative z-10 py-24 px-4">
         <div className="max-w-6xl mx-auto">
