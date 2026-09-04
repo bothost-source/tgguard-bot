@@ -64,7 +64,7 @@ router.post('/bot-token', async (req, res) => {
     }
 
     // Verify the bot-generated token
-    const decoded = jwt.verify(botToken, process.env.BOT_TOKEN) as any
+    const decoded = jwt.verify(botToken, process.env.BOT_TOKEN)  // ─── FIXED: removed `as any` ───
     const { telegramId, groupId } = decoded
 
     if (!telegramId) {
