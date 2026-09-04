@@ -15,6 +15,7 @@ interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   login: () => void
+  loginWithBotToken: (token: string) => Promise<boolean>
   logout: () => void
   refreshUser: () => Promise<void>
 }
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   isAuthenticated: false,
   login: () => {},
+  loginWithBotToken: async () => false,
   logout: () => {},
   refreshUser: async () => {},
 })
@@ -51,9 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { refreshUser() }, [refreshUser])
 
   const login = useCallback(() => {
-    // Hardcode the correct backend URL to avoid env issues
     const API_URL = import.meta.env.VITE_API_URL || 'https://tgguard-bot.onrender.com/api'
     window.location.href = `${API_URL}/auth/telegram`
+  }, [])
+
+  // NEW: Login with bot-generated magic token
+  const loginWithBotToken = useCallback(async (botToken: string): Promise<boolean> => {
+    try {
+      const { data } = await api.post('/auth/bot-token', { token: botToken })
+      localStorage.setItem('tgguard_token', data.token)
+      setUser(data.user)
+      return true
+    } catch (err) {
+      console.error('Bot token login failed:', err)
+      return false
+    }
   }, [])
 
   const logout = useCallback(() => {
@@ -63,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, loginWithBotToken, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
