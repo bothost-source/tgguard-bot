@@ -1,14 +1,13 @@
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
 import OwnerDashboard from './pages/OwnerDashboard'
 import FAQ from './pages/FAQ'
 import Documentation from './pages/Documentation'
 import ProtectedRoute from './components/ProtectedRoute'
 import ToastContainer from './components/ToastContainer'
-import AuthHandler from './components/AuthHandler'  // ─── NEW: import AuthHandler ───
+import AuthHandler from './components/AuthHandler'
 import { useToast } from './hooks/useToast'
 
 function App() {
@@ -17,17 +16,16 @@ function App() {
 
   return (
     <>
-      {/* ─── NEW: AuthHandler runs on every route to catch ?token= in URL ─── */}
       <AuthHandler />
       
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />  {/* ─── REMOVED: redirect to home ─── */}
           <Route path="/faq" element={<FAQ />} />
           <Route path="/docs" element={<Documentation />} />
           <Route path="/dashboard/*" element={
-            <ProtectedRoute allowedRoles={['community_admin']}>
+            <ProtectedRoute allowedRoles={['community_admin', 'owner']}>  {/* ─── FIXED: allow owner too ─── */}
               <Dashboard />
             </ProtectedRoute>
           } />
