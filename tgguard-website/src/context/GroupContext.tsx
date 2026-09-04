@@ -44,8 +44,31 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await api.get('/groups')
       setGroups(data)
+      
+      // ─── NEW: Check if there's a groupId from magic link to auto-select ───
+      const magicGroupId = localStorage.getItem('tgguard_magic_group_id')
+      if (magicGroupId) {
+        const matched = data.find((g: Group) => g.chat_id === magicGroupId || g.id === magicGroupId)
+        if (matched) {
+          setSelectedGroup(matched)
+          localStorage.setItem('tgguard_selected_group', matched.id)
+          localStorage.removeItem('tgguard_magic_group_id') // Clean up
+          return
+        }
+      }
+      
+      // Fallback: select first group or restore from localStorage
+      const savedId = localStorage.getItem('tgguard_selected_group')
+      if (savedId) {
+        const saved = data.find((g: Group) => g.id === savedId)
+        if (saved) {
+          setSelectedGroup(saved)
+          return
+        }
+      }
       if (data.length > 0 && !selectedGroup) {
         setSelectedGroup(data[0])
+        localStorage.setItem('tgguard_selected_group', data[0].id)
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load groups')
