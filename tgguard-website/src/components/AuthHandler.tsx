@@ -17,7 +17,13 @@ export default function AuthHandler() {
     
     loginWithBotToken(botToken).then((success) => {
       if (success) {
-        navigate('/dashboard', { replace: true })
+        const userStr = localStorage.getItem('tgguard_user')
+        const user = userStr ? JSON.parse(userStr) : null
+        if (user?.role === 'owner') {
+          navigate('/owner/dashboard', { replace: true })
+        } else {
+          navigate('/dashboard', { replace: true })
+        }
       } else {
         navigate('/login?error=invalid_token', { replace: true })
       }
