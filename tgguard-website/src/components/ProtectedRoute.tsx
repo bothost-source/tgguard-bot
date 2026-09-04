@@ -4,10 +4,10 @@ import { ReactNode } from 'react'
 
 interface Props { children: ReactNode; allowedRoles?: string[] }
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
-  const { user, isLoading, isAuthenticated } = useAuth()
+  const { user, isLoading, isAuthenticated, isBotLoggingIn } = useAuth()
   const location = useLocation()
 
-  if (isLoading) {
+  if (isLoading || isBotLoggingIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -25,4 +25,3 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
   }
   return <>{children}</>
 }
- 
