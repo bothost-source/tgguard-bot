@@ -2,13 +2,14 @@ import { Telegraf } from 'telegraf'
 import { db } from '../models/db.js'
 import { ObjectId } from 'mongodb'
 import * as tg from './telegram.js'
-import jwt from 'jsonwebtoken'  // ─── NEW: import jwt ───
+import jwt from 'jsonwebtoken'
 
 const BOT_TOKEN = process.env.BOT_TOKEN
 let bot = null
 let isRunning = false
 
-const groupAdders = new Map()
+// ─── Track who added the bot to each group ───
+const groupAdders = new Map() // key: chatId (string), value: { userId, username, firstName }
 
 export function initBot() {
   if (!BOT_TOKEN) {
@@ -250,7 +251,7 @@ Tap below to get started.`
   return bot
 }
 
-// ─── NEW: Handle dashboard button clicks ───
+// ─── Handle dashboard button clicks ───
 async function handleDashboardButton(ctx) {
   const chatId = ctx.chat?.id
   const userId = ctx.from.id
@@ -263,21 +264,27 @@ async function handleDashboardButton(ctx) {
 
   const adder = groupAdders.get(chatIdStr)
   if (userId === adder.userId) {
-    // The person who added the bot can open the link
+    // DM the link to the adder, don't post in group
     const token = jwt.sign(
       { telegramId: adder.userId.toString(), groupId: chatId.toString() },
       process.env.BOT_TOKEN,
       { expiresIn: '7d' }
     )
     const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
-    await ctx.answerCbQuery('✅ Opening dashboard...')
-    await ctx.reply('🌐 Your Dashboard:', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
-        ]
-      }
-    })
+    
+    try {
+      await tg.sendMessage(adder.userId, `🌐 Your Dashboard for this group:`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
+          ]
+        }
+      })
+      await ctx.answerCbQuery('✅ Check your DMs for the dashboard link!', { show_alert: true })
+    } catch (err) {
+      console.error('Failed to DM dashboard link:', err.message)
+      await ctx.answerCbQuery('❌ Could not send DM. Make sure you started a chat with me.', { show_alert: true })
+    }
   } else {
     await ctx.answerCbQuery('🚫 Not Allowed — Only the person who added the bot can access this.', { show_alert: true })
   }
@@ -439,7 +446,7 @@ async function handleBotAdded(ctx, chatId) {
   const perms = await tg.getBotPermissions(chatId)
   const existing = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
 
-  // ─── NEW: Detect who added the bot ───
+  // Detect who added the bot
   let adder = null
   if (ctx.message && ctx.message.from) {
     adder = {
@@ -482,7 +489,7 @@ async function handleBotAdded(ctx, chatId) {
     })
   }
 
-  // ─── NEW: Send DM to the person who added the bot with JWT token ───
+  // Send DM to the person who added the bot with JWT token
   if (adder) {
     try {
       const token = jwt.sign(
@@ -502,7 +509,7 @@ Manage settings: ${dashboardUrl}`, {
   }
 
   if (perms?.is_admin) {
-    // ─── NEW: Group message with restricted dashboard button ───
+    // Group message with restricted dashboard button
     await tg.sendMessage(chatId, `✅ TGGuard has been added!
 
 Visit the dashboard to configure protection.`, {
