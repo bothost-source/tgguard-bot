@@ -64,8 +64,8 @@ router.post('/bot-token', async (req, res) => {
     }
 
     // Verify the bot-generated token
-    const decoded = jwt.verify(botToken, process.env.BOT_TOKEN)  // ─── FIXED: removed `as any` ───
-    const { telegramId, groupId } = decoded
+    const decoded = jwt.verify(botToken, process.env.BOT_TOKEN)
+    const { telegramId, groupId, role } = decoded
 
     if (!telegramId) {
       return res.status(400).json({ error: 'Invalid token' })
@@ -73,13 +73,14 @@ router.post('/bot-token', async (req, res) => {
 
     const tgId = BigInt(telegramId)
     const isOwner = tgId.toString() === process.env.OWNER_TELEGRAM_ID
+    const assignedRole = role || (isOwner ? 'owner' : 'community_admin')
 
     // Find or create user
     let user = await db.collection('users').findOne({ telegram_id: tgId })
     if (!user) {
       const result = await db.collection('users').insertOne({
         telegram_id: tgId, username: null, first_name: null,
-        avatar_url: null, role: isOwner ? 'owner' : 'community_admin',
+        avatar_url: null, role: assignedRole,
         is_active: true, last_login: new Date(), created_at: new Date(), updated_at: new Date()
       })
       user = await db.collection('users').findOne({ _id: result.insertedId })
