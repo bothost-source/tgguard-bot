@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import StatCard from '../../components/StatCard'
 import AnimatedCard from '../../components/AnimatedCard'
+import api from '../../lib/api'  // ─── NEW: import api ───
 
 interface PlatformStats {
   total_users: number
@@ -31,8 +32,6 @@ export default function OwnerOverview() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const token = localStorage.getItem('tgguard_token')
-
   useEffect(() => {
     fetchData()
   }, [])
@@ -41,14 +40,15 @@ export default function OwnerOverview() {
     setLoading(true)
     setError('')
     try {
+      // ─── FIXED: Use api instance instead of raw fetch ───
       const [statsRes, healthRes] = await Promise.all([
-        fetch('/api/owner/stats', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/owner/health', { headers: { Authorization: `Bearer ${token}` } }),
+        api.get('/owner/stats'),
+        api.get('/owner/health'),
       ])
-      if (statsRes.ok) setStats(await statsRes.json())
-      if (healthRes.ok) setHealth(await healthRes.json())
-    } catch (e) {
-      setError('Failed to load platform data')
+      setStats(statsRes.data)
+      setHealth(healthRes.data)
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'Failed to load platform data')
     } finally {
       setLoading(false)
     }
