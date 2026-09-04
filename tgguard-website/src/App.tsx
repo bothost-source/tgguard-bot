@@ -8,6 +8,7 @@ import FAQ from './pages/FAQ'
 import Documentation from './pages/Documentation'
 import ProtectedRoute from './components/ProtectedRoute'
 import ToastContainer from './components/ToastContainer'
+import AuthHandler from './components/AuthHandler'  // ─── NEW: import AuthHandler ───
 import { useToast } from './hooks/useToast'
 
 function App() {
@@ -16,6 +17,9 @@ function App() {
 
   return (
     <>
+      {/* ─── NEW: AuthHandler runs on every route to catch ?token= in URL ─── */}
+      <AuthHandler />
+      
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<LandingPage />} />
