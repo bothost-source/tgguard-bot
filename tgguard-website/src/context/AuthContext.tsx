@@ -14,6 +14,7 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
+  isBotLoggingIn: boolean
   login: () => void
   loginWithBotToken: (token: string) => Promise<boolean>
   logout: () => void
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  isBotLoggingIn: false,
   login: () => {},
   loginWithBotToken: async () => false,
   logout: () => {},
@@ -35,6 +37,7 @@ export const useAuth = () => useContext(AuthContext)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isBotLoggingIn, setIsBotLoggingIn] = useState(false)
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('tgguard_token')
@@ -57,8 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${API_URL}/auth/telegram`
   }, [])
 
-  // NEW: Login with bot-generated magic token
   const loginWithBotToken = useCallback(async (botToken: string): Promise<boolean> => {
+    setIsBotLoggingIn(true)
     try {
       const { data } = await api.post('/auth/bot-token', { token: botToken })
       localStorage.setItem('tgguard_token', data.token)
@@ -67,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Bot token login failed:', err)
       return false
+    } finally {
+      setIsBotLoggingIn(false)
     }
   }, [])
 
@@ -77,7 +82,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, loginWithBotToken, logout, refreshUser }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isLoading, 
+      isAuthenticated: !!user, 
+      isBotLoggingIn,
+      login, 
+      loginWithBotToken, 
+      logout, 
+      refreshUser 
+    }}>
       {children}
     </AuthContext.Provider>
   )
