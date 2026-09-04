@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 
 // This component checks for bot-generated tokens in the URL and auto-logs in
 export default function AuthHandler() {
-  const { loginWithBotToken, refreshUser } = useAuth()
+  const { loginWithBotToken } = useAuth()  // ─── FIXED: removed unused `refreshUser` ───
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
