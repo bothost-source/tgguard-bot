@@ -45,8 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await api.get('/auth/me')
       setUser(data)
+      localStorage.setItem('tgguard_user', JSON.stringify(data))
     } catch (err) {
       localStorage.removeItem('tgguard_token')
+      localStorage.removeItem('tgguard_user')
       setUser(null)
     } finally {
       setIsLoading(false)
@@ -65,6 +67,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await api.post('/auth/bot-token', { token: botToken })
       localStorage.setItem('tgguard_token', data.token)
+      localStorage.setItem('tgguard_user', JSON.stringify(data.user))
+      
+      // ─── NEW: Store groupId from token payload for auto-selection ───
+      try {
+        const payload = JSON.parse(atob(botToken.split('.')[1]))
+        if (payload.groupId) {
+          localStorage.setItem('tgguard_magic_group_id', payload.groupId)
+        }
+      } catch (e) {
+        // Ignore decode errors
+      }
+      
       setUser(data.user)
       return true
     } catch (err) {
@@ -77,6 +91,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('tgguard_token')
+    localStorage.removeItem('tgguard_user')
+    localStorage.removeItem('tgguard_magic_group_id')
+    localStorage.removeItem('tgguard_selected_group')
     setUser(null)
     window.location.href = '/'
   }, [])
