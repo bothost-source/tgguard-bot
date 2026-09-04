@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { Shield, Users, AlertTriangle, MessageSquare, Activity, Group } from 'lucide-react'
 import { useGroup } from '../../context/GroupContext'
 import api from '../../lib/api'
@@ -58,6 +59,13 @@ export default function OverviewPage() {
     { icon: Shield, label: 'Protection', value: stats?.is_active ? 'Active' : 'Inactive', suffix: '', isStatus: true },
     { icon: AlertTriangle, label: 'Warnings Today', value: stats?.warnings_today ?? 0, suffix: '' },
     { icon: MessageSquare, label: 'Deleted Today', value: stats?.deleted_messages_today ?? 0, suffix: '' },
+  ]
+
+  // ─── NEW: Quick actions with navigation links ───
+  const quickActions = [
+    { icon: Shield, label: 'Protection', desc: 'Configure anti-spam and filters', color: 'text-cyan-400', path: '/dashboard/protection' },
+    { icon: MessageSquare, label: 'Welcome', desc: 'Set up welcome messages', color: 'text-green-400', path: '/dashboard/welcome' },
+    { icon: AlertTriangle, label: 'Reports', desc: 'Review member reports', color: 'text-yellow-400', path: '/dashboard/reports' },
   ]
 
   return (
@@ -136,12 +144,8 @@ export default function OverviewPage() {
         <AnimatedCard>
           <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
           <div className="space-y-3">
-            {[
-              { icon: Shield, label: 'Protection', desc: 'Configure anti-spam and filters', color: 'text-cyan-400' },
-              { icon: MessageSquare, label: 'Welcome', desc: 'Set up welcome messages', color: 'text-green-400' },
-              { icon: AlertTriangle, label: 'Reports', desc: 'Review member reports', color: 'text-yellow-400' },
-            ].map((action, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/[0.03] transition-colors cursor-pointer group">
+            {quickActions.map((action, i) => (
+              <Link key={i} to={action.path} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/[0.03] transition-colors cursor-pointer group">
                 <div className={`w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0 ${action.color}`}>
                   <action.icon className="w-4 h-4" />
                 </div>
@@ -149,7 +153,7 @@ export default function OverviewPage() {
                   <p className="text-sm font-medium text-white group-hover:text-white/80">{action.label}</p>
                   <p className="text-xs text-white/30">{action.desc}</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </AnimatedCard>
