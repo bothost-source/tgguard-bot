@@ -5,11 +5,9 @@ import * as tg from './telegram.js'
 import jwt from 'jsonwebtoken'
 
 const BOT_TOKEN = process.env.BOT_TOKEN
+const OWNER_TELEGRAM_ID = process.env.OWNER_TELEGRAM_ID
 let bot = null
 let isRunning = false
-
-// ─── Track who added the bot to each group ───
-const groupAdders = new Map() // key: chatId (string), value: { userId, username, firstName }
 
 export function initBot() {
   if (!BOT_TOKEN) {
@@ -34,13 +32,14 @@ export function initBot() {
         },
         $setOnInsert: {
           telegram_id: BigInt(user.id),
-          role: user.id.toString() === process.env.OWNER_TELEGRAM_ID ? 'owner' : 'community_admin',
+          role: user.id.toString() === OWNER_TELEGRAM_ID ? 'owner' : 'community_admin',
           created_at: new Date()
         }
       },
       { upsert: true }
     )
 
+    // ─── RICH TEXT: Use message entities instead of parse_mode ───
     const welcomeText = `👋 Welcome to TGGuard!
 
 TGGuard helps protect and manage Telegram communities with smart moderation, verification, welcome messages, reports, games and analytics.
@@ -126,7 +125,6 @@ Tap below to get started.`
         { chat_id: BigInt(chatId) },
         { $set: { is_active: false, bot_is_admin: false, updated_at: new Date() } }
       )
-      groupAdders.delete(chatId.toString())
       return
     }
     await db.collection('groups').updateOne(
@@ -159,7 +157,6 @@ Tap below to get started.`
         { _id: group._id },
         { $set: { is_active: false, bot_is_admin: false, updated_at: new Date() } }
       )
-      groupAdders.delete(chatId.toString())
     }
   })
 
@@ -257,23 +254,29 @@ async function handleDashboardButton(ctx) {
   const userId = ctx.from.id
   const chatIdStr = chatId?.toString()
 
-  if (!chatIdStr || !groupAdders.has(chatIdStr)) {
+  if (!chatIdStr) {
+    await ctx.answerCbQuery('❌ Error: Could not identify group.', { show_alert: true })
+    return
+  }
+
+  // ─── PERSISTENT: Load adder from database instead of memory ───
+  const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
+  if (!group || !group.added_by) {
     await ctx.answerCbQuery('❌ Dashboard access unavailable.', { show_alert: true })
     return
   }
 
-  const adder = groupAdders.get(chatIdStr)
-  if (userId === adder.userId) {
-    // DM the link to the adder, don't post in group
+  if (userId === group.added_by) {
+    // Generate fresh token and DM the link
     const token = jwt.sign(
-      { telegramId: adder.userId.toString(), groupId: chatId.toString() },
+      { telegramId: userId.toString(), groupId: chatId.toString() },
       process.env.BOT_TOKEN,
       { expiresIn: '7d' }
     )
     const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
     
     try {
-      await tg.sendMessage(adder.userId, `🌐 Your Dashboard for this group:`, {
+      await tg.sendMessage(userId, `🌐 Your Dashboard for this group:`, {
         reply_markup: {
           inline_keyboard: [
             [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
@@ -292,7 +295,12 @@ async function handleDashboardButton(ctx) {
 
 // MENU FUNCTIONS
 async function showMainMenu(ctx) {
-  await ctx.reply('🛡️ TGGuard Main Menu', {
+  const text = '🛡️ *TGGuard Main Menu*\n\nChoose an option below:'
+  const entities = [
+    { type: 'bold', offset: 0, length: 21 }
+  ]
+  await ctx.reply(text, {
+    entities,
     reply_markup: { inline_keyboard: [
       [{ text: '🛡️ Add to Group', callback_data: 'add_to_group' }],
       [{ text: '⚙️ Control Panel', callback_data: 'control_panel' }],
@@ -305,7 +313,12 @@ async function showMainMenu(ctx) {
 }
 
 async function showHelp(ctx) {
-  await ctx.reply('📖 TGGuard Help', {
+  const text = '📖 *TGGuard Help*\n\nSelect a topic to learn more:'
+  const entities = [
+    { type: 'bold', offset: 0, length: 16 }
+  ]
+  await ctx.reply(text, {
+    entities,
     reply_markup: { inline_keyboard: [
       [{ text: '🛡️ Protection', callback_data: 'help_protection' }],
       [{ text: '🎮 Games', callback_data: 'help_games' }],
@@ -319,28 +332,31 @@ async function showHelp(ctx) {
 }
 
 async function showFAQ(ctx) {
-  await ctx.reply(`❓ Frequently Asked Questions
+  const text = `❓ *Frequently Asked Questions*
 
-1. What is TGGuard?
-TGGuard is a Telegram community protection and management platform.
+1\\. *What is TGGuard?*
+TGGuard is a Telegram community protection and management platform\\.
 
-2. How do I add TGGuard?
-Tap "Add to Group" and follow the instructions.
+2\\. *How do I add TGGuard?*
+Tap "Add to Group" and follow the instructions\\.
 
-3. What permissions does TGGuard need?
-Administrator permissions for moderation features.
+3\\. *What permissions does TGGuard need?*
+Administrator permissions for moderation features\\.
 
-4. How do protection features work?
-Configure them in the dashboard. The bot executes them automatically.
+4\\. *How do protection features work?*
+Configure them in the dashboard\\. The bot executes them automatically\\.
 
-5. How do games work?
-Enable games in the dashboard. Members play in Telegram.
+5\\. *How do games work?*
+Enable games in the dashboard\\. Members play in Telegram\\.
 
-6. How do I remove TGGuard?
-Remove the bot from your group. Data is retained for 30 days.
+6\\. *How do I remove TGGuard?*
+Remove the bot from your group\\. Data is retained for 30 days\\.
 
-7. How do I contact support?
-Visit ${process.env.FRONTEND_URL}/support`, {
+7\\. *How do I contact support?*
+Visit ${process.env.FRONTEND_URL}/support`
+
+  await ctx.reply(text, {
+    parse_mode: 'MarkdownV2',
     reply_markup: { inline_keyboard: [[{ text: '⬅️ Back', callback_data: 'main_menu' }]] }
   })
 }
@@ -348,14 +364,15 @@ Visit ${process.env.FRONTEND_URL}/support`, {
 async function showAddToGroup(ctx) {
   const botInfo = await tg.getBotInfo()
   if (!botInfo) { await ctx.reply('❌ Bot is not available right now.'); return }
-  await ctx.reply(`🛡️ Add TGGuard to Your Group
+  
+  const text = `🛡️ *Add TGGuard to Your Group*
 
-1. Add @${botInfo.username} to your group
-2. Make it an administrator
-3. Return to the dashboard to verify
-
-[➕ Add TGGuard](https://t.me/${botInfo.username}?startgroup=true)`, {
-    parse_mode: 'Markdown',
+1\\. Add @${botInfo.username} to your group
+2\\. Make it an administrator
+3\\. Return to the dashboard to verify`
+  
+  await ctx.reply(text, {
+    parse_mode: 'MarkdownV2',
     reply_markup: { inline_keyboard: [
       [{ text: '➕ Add TGGuard', url: `https://t.me/${botInfo.username}?startgroup=true` }],
       [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
@@ -412,10 +429,19 @@ async function showLeaderboard(ctx) {
     { $sort: { total: -1 } },
     { $limit: 10 }
   ]).toArray()
-  let text = '🏆 TGGuard Global Leaderboard'
-  if (topScores.length === 0) { text += 'No games played yet. Be the first!' }
-  else { topScores.forEach((s, i) => { const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`; text += `${medal} ${s.username || `User${s._id}`} — ${s.total} points` }) }
+  let text = '🏆 *TGGuard Global Leaderboard*'
+  const entities = [{ type: 'bold', offset: 0, length: 28 }]
+  if (topScores.length === 0) { 
+    text += '\n\nNo games played yet\\. Be the first\\!' 
+  } else { 
+    topScores.forEach((s, i) => { 
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}\\.`; 
+      text += `\n${medal} ${s.username || `User${s._id}`} — ${s.total} points` 
+    }) 
+  }
   await ctx.reply(text, {
+    parse_mode: 'MarkdownV2',
+    entities,
     reply_markup: { inline_keyboard: [
       [{ text: '🎮 Play Games', callback_data: 'games' }],
       [{ text: '⬅️ Back', callback_data: 'main_menu' }]
@@ -424,15 +450,18 @@ async function showLeaderboard(ctx) {
 }
 
 async function showHowToPlay(ctx) {
-  await ctx.reply(`📖 How to Play TGGuard Games
+  const text = `📖 *How to Play TGGuard Games*
 
-🧩 Word Scramble - Unscramble letters. First correct wins!
-🌍 World Trivia - Answer geography questions.
-⚡ Speed Quiz - Answer quickly. Most points wins!
-🔤 Missing Letters - Fill in missing letters.
-😀 Emoji Challenge - Guess from emoji clues.
+🧩 *Word Scramble* \\- Unscramble letters\\. First correct wins\\!
+🌍 *World Trivia* \\- Answer geography questions\\.
+⚡ *Speed Quiz* \\- Answer quickly\\. Most points wins\\!
+🔤 *Missing Letters* \\- Fill in missing letters\\.
+😀 *Emoji Challenge* \\- Guess from emoji clues\\.
 
-All games played in Telegram!`, {
+All games played in Telegram\\!`
+  
+  await ctx.reply(text, {
+    parse_mode: 'MarkdownV2',
     reply_markup: { inline_keyboard: [
       [{ text: '🎮 Play Now', callback_data: 'games' }],
       [{ text: '⬅️ Back', callback_data: 'main_menu' }]
@@ -447,27 +476,36 @@ async function handleBotAdded(ctx, chatId) {
   const existing = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
 
   // Detect who added the bot
-  let adder = null
-  if (ctx.message && ctx.message.from) {
-    adder = {
-      userId: ctx.message.from.id,
-      username: ctx.message.from.username,
-      firstName: ctx.message.from.first_name
-    }
-    groupAdders.set(chatId.toString(), adder)
-  }
+  const adderId = ctx.message?.from?.id || null
 
   if (existing) {
     await db.collection('groups').updateOne(
       { _id: existing._id },
-      { $set: { name: chat.title, chat_type: chat.type, is_active: perms?.is_admin || false, bot_is_admin: perms?.is_admin || false, bot_permissions: perms, updated_at: new Date() } }
+      { $set: { 
+        name: chat.title, 
+        chat_type: chat.type, 
+        is_active: perms?.is_admin || false, 
+        bot_is_admin: perms?.is_admin || false, 
+        bot_permissions: perms, 
+        added_by: adderId,
+        updated_at: new Date() 
+      } }
     )
   } else {
     const result = await db.collection('groups').insertOne({
-      chat_id: BigInt(chatId), name: chat.title, chat_type: chat.type,
-      invite_link: chat.invite_link || null, member_count: await tg.getChatMembersCount(chatId),
-      is_active: perms?.is_admin || false, is_verified: false, bot_is_admin: perms?.is_admin || false,
-      bot_permissions: perms, admins: [], created_at: new Date(), updated_at: new Date()
+      chat_id: BigInt(chatId), 
+      name: chat.title, 
+      chat_type: chat.type,
+      invite_link: chat.invite_link || null, 
+      member_count: await tg.getChatMembersCount(chatId),
+      is_active: perms?.is_admin || false, 
+      is_verified: false, 
+      bot_is_admin: perms?.is_admin || false,
+      bot_permissions: perms, 
+      admins: [], 
+      added_by: adderId,
+      created_at: new Date(), 
+      updated_at: new Date()
     })
     await db.collection('group_settings').insertOne({
       group_id: result.insertedId, protection_enabled: true, anti_spam_enabled: false,
@@ -489,19 +527,47 @@ async function handleBotAdded(ctx, chatId) {
     })
   }
 
-  // Send DM to the person who added the bot with JWT token
-  if (adder) {
+  // ─── OWNER LINK: If adder is the owner, send owner panel link ───
+  if (adderId && adderId.toString() === OWNER_TELEGRAM_ID) {
     try {
       const token = jwt.sign(
-        { telegramId: adder.userId.toString(), groupId: chatId.toString() },
+        { telegramId: adderId.toString(), groupId: chatId.toString(), role: 'owner' },
+        process.env.BOT_TOKEN,
+        { expiresIn: '7d' }
+      )
+      const ownerUrl = `${process.env.FRONTEND_URL}/owner/dashboard?token=${token}`
+      await tg.sendMessage(adderId, `✅ TGGuard is active in *${chat.title || 'your group'}*!
+
+You are the *owner*\\. Access your owner panel:`, {
+        parse_mode: 'MarkdownV2',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '👑 Owner Panel', url: ownerUrl }]
+          ]
+        }
+      })
+    } catch (dmErr) {
+      console.error('Failed to send owner DM:', dmErr.message)
+    }
+  }
+  // ─── REGULAR USER LINK: If adder is not owner, send regular dashboard link ───
+  else if (adderId) {
+    try {
+      const token = jwt.sign(
+        { telegramId: adderId.toString(), groupId: chatId.toString(), role: 'community_admin' },
         process.env.BOT_TOKEN,
         { expiresIn: '7d' }
       )
       const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
-      await tg.sendMessage(adder.userId, `✅ TGGuard is active in *${chat.title || 'your group'}*!
+      await tg.sendMessage(adderId, `✅ TGGuard is active in *${chat.title || 'your group'}*!
 
-Manage settings: ${dashboardUrl}`, {
-        parse_mode: 'Markdown'
+Manage settings:`, {
+        parse_mode: 'MarkdownV2',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
+          ]
+        }
       })
     } catch (dmErr) {
       console.error('Failed to send DM to bot adder:', dmErr.message)
