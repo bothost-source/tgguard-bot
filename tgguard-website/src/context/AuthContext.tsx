@@ -15,6 +15,7 @@ interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   isBotLoggingIn: boolean
+  isRestoring: boolean
   login: () => void
   loginWithBotToken: (token: string) => Promise<boolean>
   logout: () => void
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   isAuthenticated: false,
   isBotLoggingIn: false,
+  isRestoring: true,
   login: () => {},
   loginWithBotToken: async () => false,
   logout: () => {},
@@ -38,10 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isBotLoggingIn, setIsBotLoggingIn] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(true)
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('tgguard_token')
-    if (!token) { setUser(null); setIsLoading(false); return }
+    if (!token) { 
+      setUser(null)
+      setIsLoading(false)
+      setIsRestoring(false)
+      return 
+    }
     try {
       const { data } = await api.get('/auth/me')
       setUser(data)
@@ -52,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
     } finally {
       setIsLoading(false)
+      setIsRestoring(false)
     }
   }, [])
 
@@ -69,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('tgguard_token', data.token)
       localStorage.setItem('tgguard_user', JSON.stringify(data.user))
       
-      // ─── NEW: Store groupId from token payload for auto-selection ───
       try {
         const payload = JSON.parse(atob(botToken.split('.')[1]))
         if (payload.groupId) {
@@ -86,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false
     } finally {
       setIsBotLoggingIn(false)
+      setIsRestoring(false)
     }
   }, [])
 
@@ -104,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading, 
       isAuthenticated: !!user, 
       isBotLoggingIn,
+      isRestoring,
       login, 
       loginWithBotToken, 
       logout, 
