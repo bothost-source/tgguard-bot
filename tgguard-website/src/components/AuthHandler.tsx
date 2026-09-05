@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 
 export default function AuthHandler() {
   const { loginWithBotToken, isBotLoggingIn, isAuthenticated, isRestoring } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const location = useLocation()
   const hasProcessed = useRef(false)
