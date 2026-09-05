@@ -1,3 +1,4 @@
+// ─── App.jsx ───
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import LandingPage from './pages/LandingPage'
@@ -21,11 +22,11 @@ function App() {
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />  {/* ─── REMOVED: redirect to home ─── */}
+          {/* ─── FIX: Remove /login redirect — let ProtectedRoute handle unauth ─── */}
           <Route path="/faq" element={<FAQ />} />
           <Route path="/docs" element={<Documentation />} />
           <Route path="/dashboard/*" element={
-            <ProtectedRoute allowedRoles={['community_admin', 'owner']}>  {/* ─── FIXED: allow owner too ─── */}
+            <ProtectedRoute allowedRoles={['community_admin', 'owner']}>
               <Dashboard />
             </ProtectedRoute>
           } />
