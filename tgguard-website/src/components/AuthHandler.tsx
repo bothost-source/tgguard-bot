@@ -1,34 +1,45 @@
 import { useEffect, useRef } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function AuthHandler() {
-  const { loginWithBotToken, isBotLoggingIn } = useAuth()
-  const [searchParams] = useSearchParams()
+  const { loginWithBotToken, isBotLoggingIn, isAuthenticated, isRestoring } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const hasProcessed = useRef(false)
 
   useEffect(() => {
     const botToken = searchParams.get('token')
     
-    if (!botToken || hasProcessed.current || isBotLoggingIn) return
+    // Already authenticated + has token in URL → just clean URL and stay
+    if (isAuthenticated && botToken) {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('token')
+      navigate({ pathname: location.pathname, search: newParams.toString() }, { replace: true })
+      return
+    }
+    
+    // Wait for auth restoration to finish before processing
+    if (!botToken || hasProcessed.current || isBotLoggingIn || isRestoring) return
     
     hasProcessed.current = true
     
     loginWithBotToken(botToken).then((success) => {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('token')
+      
       if (success) {
         const userStr = localStorage.getItem('tgguard_user')
         const user = userStr ? JSON.parse(userStr) : null
-        if (user?.role === 'owner') {
-          navigate('/owner/dashboard', { replace: true })
-        } else {
-          navigate('/dashboard', { replace: true })
-        }
+        const targetPath = user?.role === 'owner' ? '/owner/dashboard' : '/dashboard'
+        navigate({ pathname: targetPath, search: newParams.toString() }, { replace: true })
       } else {
-        navigate('/login?error=invalid_token', { replace: true })
+        // Bad token: strip it and stay on current page
+        navigate({ pathname: location.pathname, search: newParams.toString() }, { replace: true })
       }
     })
-  }, [searchParams, loginWithBotToken, navigate, isBotLoggingIn])
+  }, [searchParams, loginWithBotToken, navigate, isBotLoggingIn, isAuthenticated, isRestoring, location.pathname])
 
   return null
 }
