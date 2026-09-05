@@ -1,5 +1,5 @@
 // ─── App.jsx ───
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import LandingPage from './pages/LandingPage'
 import Dashboard from './pages/Dashboard'
