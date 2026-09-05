@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf'
+import TelegramBot from 'node-telegram-bot-api'
 import { db } from '../models/db.js'
 import { ObjectId } from 'mongodb'
 import * as tg from './telegram.js'
@@ -9,17 +9,27 @@ const OWNER_TELEGRAM_ID = process.env.OWNER_TELEGRAM_ID
 let bot = null
 let isRunning = false
 
+// ─── Helper: Send rich HTML message ───
+function sendRich(bot, chatId, html, opts = {}) {
+  return bot.sendMessage(chatId, html, { parse_mode: 'HTML', ...opts })
+}
+
+// ─── Helper: Build inline keyboard for node-telegram-bot-api ───
+function inlineKeyboard(buttons) {
+  return { reply_markup: { inline_keyboard: buttons } }
+}
+
 export function initBot() {
   if (!BOT_TOKEN) {
     console.error('BOT_TOKEN not configured - bot cannot start')
     return null
   }
 
-  bot = new Telegraf(BOT_TOKEN)
+  bot = new TelegramBot(BOT_TOKEN, { polling: false })
 
-  // /START COMMAND
-  bot.start(async (ctx) => {
-    const user = ctx.from
+  // ─── /START COMMAND ───
+  bot.onText(/\/start/, async (msg) => {
+    const user = msg.from
     await db.collection('users').updateOne(
       { telegram_id: BigInt(user.id) },
       {
@@ -39,7 +49,7 @@ export function initBot() {
       { upsert: true }
     )
 
-    const welcomeText = `👋 Welcome to TGGuard!
+    const welcomeText = `<b>👋 Welcome to TGGuard!</b>
 
 TGGuard helps protect and manage Telegram communities with smart moderation, verification, welcome messages, reports, games and analytics.
 
@@ -47,77 +57,80 @@ Your group is managed from the TGGuard Dashboard.
 
 Tap below to get started.`
 
-    await ctx.reply(welcomeText, {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
-          [{ text: '📚 Documentation', url: `${process.env.FRONTEND_URL}/docs` }],
-          [{ text: '❓ Help', callback_data: 'help' }]
-        ]
-      }
-    })
+    await sendRich(bot, msg.chat.id, welcomeText, inlineKeyboard([
+      [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
+      [{ text: '📚 Documentation', url: `${process.env.FRONTEND_URL}/docs` }],
+      [{ text: '❓ Help', callback_data: 'help' }]
+    ]))
   })
 
-  bot.command('menu', async (ctx) => { await showMainMenu(ctx) })
-  bot.command('help', async (ctx) => { await showHelp(ctx) })
-  bot.command('games', async (ctx) => { await showGamesMenu(ctx) })
+  // ─── /MENU COMMAND ───
+  bot.onText(/\/menu/, async (msg) => { await showMainMenu(msg) })
 
-  // CALLBACK QUERY HANDLER
-  bot.on('callback_query', async (ctx) => {
-    const data = ctx.callbackQuery.data
+  // ─── /HELP COMMAND ───
+  bot.onText(/\/help/, async (msg) => { await showHelp(msg) })
+
+  // ─── /GAMES COMMAND ───
+  bot.onText(/\/games/, async (msg) => { await showGamesMenu(msg) })
+
+  // ─── CALLBACK QUERY HANDLER ───
+  bot.on('callback_query', async (query) => {
+    const data = query.data
+    const msg = query.message
+    const chatId = msg.chat.id
     try {
-      await ctx.answerCbQuery()
+      await bot.answerCallbackQuery(query.id)
       switch (data) {
-        case 'main_menu': await showMainMenu(ctx); break
-        case 'help': await showHelp(ctx); break
-        case 'faq': await showFAQ(ctx); break
-        case 'add_to_group': await showAddToGroup(ctx); break
+        case 'main_menu': await showMainMenu(query); break
+        case 'help': await showHelp(query); break
+        case 'faq': await showFAQ(query); break
+        case 'add_to_group': await showAddToGroup(query); break
         case 'control_panel':
-          await ctx.reply('⚙️ Open the Control Panel at:' + process.env.FRONTEND_URL, {
-            reply_markup: { inline_keyboard: [
-              [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
-              [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-            ]}
-          })
+          await sendRich(bot, chatId, `<b>⚙️ Control Panel</b>
+
+Open the Control Panel at: ${process.env.FRONTEND_URL}`, inlineKeyboard([
+            [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
+            [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+          ]))
           break
-        case 'games': await showGamesMenu(ctx); break
-        case 'rate': await showRateMenu(ctx); break
-        case 'leaderboard': await showLeaderboard(ctx); break
-        case 'how_to_play': await showHowToPlay(ctx); break
-        case 'word_scramble': await startGame(ctx, 'scramble'); break
-        case 'world_trivia': await startGame(ctx, 'trivia'); break
-        case 'speed_quiz': await startGame(ctx, 'speed'); break
-        case 'missing_letters': await startGame(ctx, 'letters'); break
-        case 'emoji_challenge': await startGame(ctx, 'emoji'); break
+        case 'games': await showGamesMenu(query); break
+        case 'rate': await showRateMenu(query); break
+        case 'leaderboard': await showLeaderboard(query); break
+        case 'how_to_play': await showHowToPlay(query); break
+        case 'word_scramble': await startGame(query, 'scramble'); break
+        case 'world_trivia': await startGame(query, 'trivia'); break
+        case 'speed_quiz': await startGame(query, 'speed'); break
+        case 'missing_letters': await startGame(query, 'letters'); break
+        case 'emoji_challenge': await startGame(query, 'emoji'); break
         case 'dashboard_button':
-          await handleDashboardButton(ctx)
+          await handleDashboardButton(query)
           break
         default:
-          if (data.startsWith('game_')) await handleGameCallback(ctx, data)
-          else if (data.startsWith('verify_')) await handleVerification(ctx, data)
-          else if (data.startsWith('report_')) await handleReport(ctx, data)
-          else await ctx.reply('❓ Unknown action. Use /menu to see options.')
+          if (data.startsWith('game_')) await handleGameCallback(query, data)
+          else if (data.startsWith('verify_')) await handleVerification(query, data)
+          else if (data.startsWith('report_')) await handleReport(query, data)
+          else await sendRich(bot, chatId, '❓ Unknown action. Use /menu to see options.')
       }
     } catch (err) {
       console.error('Callback query error:', err)
-      await ctx.reply('❌ An error occurred. Please try again.')
+      await sendRich(bot, chatId, '❌ An error occurred. Please try again.')
     }
   })
 
-  // NEW CHAT MEMBERS
-  bot.on('new_chat_members', async (ctx) => {
-    const chatId = ctx.chat.id
-    const newMembers = ctx.message.new_chat_members
+  // ─── NEW CHAT MEMBERS ───
+  bot.on('new_chat_members', async (msg) => {
+    const chatId = msg.chat.id
+    const newMembers = msg.new_chat_members
     const botInfo = await tg.getBotInfo()
     const wasBotAdded = newMembers.some(m => m.id === botInfo?.id)
-    if (wasBotAdded) { await handleBotAdded(ctx, chatId); return }
-    for (const member of newMembers) { await handleNewMember(ctx, chatId, member) }
+    if (wasBotAdded) { await handleBotAdded(msg, chatId); return }
+    for (const member of newMembers) { await handleNewMember(msg, chatId, member) }
   })
 
-  // LEFT CHAT MEMBER
-  bot.on('left_chat_member', async (ctx) => {
-    const chatId = ctx.chat.id
-    const member = ctx.message.left_chat_member
+  // ─── LEFT CHAT MEMBER ───
+  bot.on('left_chat_member', async (msg) => {
+    const chatId = msg.chat.id
+    const member = msg.left_chat_member
     const botInfo = await tg.getBotInfo()
     if (member.id === botInfo?.id) {
       await db.collection('groups').updateOne(
@@ -132,10 +145,10 @@ Tap below to get started.`
     )
   })
 
-  // MY CHAT MEMBER
-  bot.on('my_chat_member', async (ctx) => {
-    const chatId = ctx.chat.id
-    const newStatus = ctx.myChatMember.new_chat_member.status
+  // ─── MY CHAT MEMBER ───
+  bot.on('my_chat_member', async (msg) => {
+    const chatId = msg.chat.id
+    const newStatus = msg.new_chat_member.status
     const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
     if (!group) return
 
@@ -159,12 +172,12 @@ Tap below to get started.`
     }
   })
 
-  // MESSAGE HANDLER (Protection)
-  bot.on('message', async (ctx) => {
-    const chatId = ctx.chat?.id
-    const message = ctx.message
-    const user = ctx.from
-    if (ctx.chat?.type === 'private' || !chatId) return
+  // ─── MESSAGE HANDLER (Protection) ───
+  bot.on('message', async (msg) => {
+    const chatId = msg.chat?.id
+    const message = msg
+    const user = msg.from
+    if (msg.chat?.type === 'private' || !chatId) return
 
     const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
     if (!group || !group.is_active) return
@@ -186,7 +199,7 @@ Tap below to get started.`
         const allowedDomains = settings.anti_link_domains ? settings.anti_link_domains.split(',').map(d => d.trim()).filter(Boolean) : []
         const isAllowed = allowedDomains.some(domain => message.text.includes(domain))
         if (settings.anti_link_mode === 'block_all' || !isAllowed) {
-          actionTaken = await executeAction(ctx, settings.anti_link_action, 'Blocked link')
+          actionTaken = await executeAction(bot, msg, settings.anti_link_action, 'Blocked link')
           if (actionTaken) { actionType = settings.anti_link_action; actionReason = 'Blocked link' }
         }
       }
@@ -198,7 +211,7 @@ Tap below to get started.`
       const lowerText = message.text.toLowerCase()
       const matchedWord = filterWords.find(fw => lowerText.includes(fw.word.toLowerCase()))
       if (matchedWord) {
-        actionTaken = await executeAction(ctx, matchedWord.action || settings.word_filter_action, `Filtered word: ${matchedWord.word}`)
+        actionTaken = await executeAction(bot, msg, matchedWord.action || settings.word_filter_action, `Filtered word: ${matchedWord.word}`)
         if (actionTaken) { actionType = matchedWord.action || settings.word_filter_action; actionReason = `Filtered phrase: ${matchedWord.word}` }
       }
     }
@@ -209,7 +222,7 @@ Tap below to get started.`
       if (mediaType) {
         const mediaSetting = settings[`media_${mediaType}`]
         if (mediaSetting === 'blocked') {
-          actionTaken = await executeAction(ctx, 'delete', `Blocked ${mediaType}`)
+          actionTaken = await executeAction(bot, msg, 'delete', `Blocked ${mediaType}`)
           if (actionTaken) { actionType = 'delete'; actionReason = `Blocked ${mediaType}` }
         }
       }
@@ -231,15 +244,25 @@ Tap below to get started.`
     }
   })
 
-  // ERROR HANDLER
-  bot.catch((err, ctx) => {
+  // ─── ERROR HANDLER ───
+  bot.on('polling_error', (err) => {
+    console.error('Bot polling error:', err)
+    db.collection('system_logs').insertOne({
+      level: 'error',
+      message: err.message,
+      stack: err.stack,
+      component: 'bot',
+      created_at: new Date()
+    }).catch(console.error)
+  })
+
+  bot.on('error', (err) => {
     console.error('Bot error:', err)
     db.collection('system_logs').insertOne({
       level: 'error',
       message: err.message,
       stack: err.stack,
       component: 'bot',
-      update_type: ctx?.updateType,
       created_at: new Date()
     }).catch(console.error)
   })
@@ -248,21 +271,20 @@ Tap below to get started.`
 }
 
 // ─── Handle dashboard button clicks ───
-async function handleDashboardButton(ctx) {
-  const chatId = ctx.chat?.id
-  const userId = ctx.from.id
+async function handleDashboardButton(query) {
+  const chatId = query.message?.chat?.id
+  const userId = query.from.id
   const chatIdStr = chatId?.toString()
 
   if (!chatIdStr) {
-    await ctx.answerCbQuery('❌ Error: Could not identify group.', { show_alert: true })
+    await bot.answerCallbackQuery(query.id, { text: '❌ Error: Could not identify group.', show_alert: true })
     return
   }
 
   const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
 
-  // ─── EXTRA SAFE: If no adder recorded, deny everyone ───
   if (!group || !group.added_by) {
-    await ctx.answerCbQuery('❌ Dashboard access unavailable. The bot could not detect who added it.', { show_alert: true })
+    await bot.answerCallbackQuery(query.id, { text: '❌ Dashboard access unavailable. The bot could not detect who added it.', show_alert: true })
     return
   }
 
@@ -273,211 +295,223 @@ async function handleDashboardButton(ctx) {
       { expiresIn: '7d' }
     )
     const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
-    
+
     try {
-      await tg.sendMessage(userId, `🌐 Your Dashboard for this group:`, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
-          ]
-        }
-      })
-      await ctx.answerCbQuery('✅ Check your DMs for the dashboard link!', { show_alert: true })
+      await sendRich(bot, userId, `<b>🌐 Your Dashboard for this group:</b>`, inlineKeyboard([
+        [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
+      ]))
+      await bot.answerCallbackQuery(query.id, { text: '✅ Check your DMs for the dashboard link!', show_alert: true })
     } catch (err) {
       console.error('Failed to DM dashboard link:', err.message)
-      await ctx.answerCbQuery('❌ Could not send DM. Make sure you started a chat with me.', { show_alert: true })
+      await bot.answerCallbackQuery(query.id, { text: '❌ Could not send DM. Make sure you started a chat with me.', show_alert: true })
     }
   } else {
-    await ctx.answerCbQuery('🚫 Not Allowed — Only the person who added the bot can access this.', { show_alert: true })
+    await bot.answerCallbackQuery(query.id, { text: '🚫 Not Allowed — Only the person who added the bot can access this.', show_alert: true })
   }
 }
 
-// MENU FUNCTIONS
-async function showMainMenu(ctx) {
-  await ctx.reply('🛡️ TGGuard Main Menu', {
-    reply_markup: { inline_keyboard: [
-      [{ text: '🛡️ Add to Group', callback_data: 'add_to_group' }],
-      [{ text: '⚙️ Control Panel', callback_data: 'control_panel' }],
-      [{ text: '🎮 Games', callback_data: 'games' }],
-      [{ text: '📖 Help', callback_data: 'help' }],
-      [{ text: '❓ FAQ', callback_data: 'faq' }],
-      [{ text: '⭐ Rate TGGuard', callback_data: 'rate' }]
-    ]}
-  })
+// ─── MENU FUNCTIONS ───
+async function showMainMenu(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
+  await sendRich(bot, chatId, `<b>🛡️ TGGuard Main Menu</b>`, inlineKeyboard([
+    [{ text: '🛡️ Add to Group', callback_data: 'add_to_group' }],
+    [{ text: '⚙️ Control Panel', callback_data: 'control_panel' }],
+    [{ text: '🎮 Games', callback_data: 'games' }],
+    [{ text: '📖 Help', callback_data: 'help' }],
+    [{ text: '❓ FAQ', callback_data: 'faq' }],
+    [{ text: '⭐ Rate TGGuard', callback_data: 'rate' }]
+  ]))
 }
 
-async function showHelp(ctx) {
-  await ctx.reply('📖 TGGuard Help', {
-    reply_markup: { inline_keyboard: [
-      [{ text: '🛡️ Protection', callback_data: 'help_protection' }],
-      [{ text: '🎮 Games', callback_data: 'help_games' }],
-      [{ text: '👋 Welcome', callback_data: 'help_welcome' }],
-      [{ text: '🔐 Verification', callback_data: 'help_verification' }],
-      [{ text: '🚨 Reports', callback_data: 'help_reports' }],
-      [{ text: '⚙️ Setup', callback_data: 'help_setup' }],
-      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-    ]}
-  })
+async function showHelp(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
+  await sendRich(bot, chatId, `<b>📖 TGGuard Help</b>`, inlineKeyboard([
+    [{ text: '🛡️ Protection', callback_data: 'help_protection' }],
+    [{ text: '🎮 Games', callback_data: 'help_games' }],
+    [{ text: '👋 Welcome', callback_data: 'help_welcome' }],
+    [{ text: '🔐 Verification', callback_data: 'help_verification' }],
+    [{ text: '🚨 Reports', callback_data: 'help_reports' }],
+    [{ text: '⚙️ Setup', callback_data: 'help_setup' }],
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-async function showFAQ(ctx) {
-  await ctx.reply(`❓ Frequently Asked Questions
+async function showFAQ(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
+  const text = `<b>❓ Frequently Asked Questions</b>
 
-1. What is TGGuard?
+<b>1. What is TGGuard?</b>
 TGGuard is a Telegram community protection and management platform.
 
-2. How do I add TGGuard?
+<b>2. How do I add TGGuard?</b>
 Tap "Add to Group" and follow the instructions.
 
-3. What permissions does TGGuard need?
+<b>3. What permissions does TGGuard need?</b>
 Administrator permissions for moderation features.
 
-4. How do protection features work?
+<b>4. How do protection features work?</b>
 Configure them in the dashboard. The bot executes them automatically.
 
-5. How do games work?
+<b>5. How do games work?</b>
 Enable games in the dashboard. Members play in Telegram.
 
-6. How do I remove TGGuard?
+<b>6. How do I remove TGGuard?</b>
 Remove the bot from your group. Data is retained for 30 days.
 
-7. How do I contact support?
-Visit ${process.env.FRONTEND_URL}/support`, {
-    reply_markup: { inline_keyboard: [[{ text: '⬅️ Back', callback_data: 'main_menu' }]] }
-  })
+<b>7. How do I contact support?</b>
+Visit <a href="${process.env.FRONTEND_URL}/support">${process.env.FRONTEND_URL}/support</a>`
+
+  await sendRich(bot, chatId, text, inlineKeyboard([
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-async function showAddToGroup(ctx) {
+async function showAddToGroup(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
   const botInfo = await tg.getBotInfo()
-  if (!botInfo) { await ctx.reply('❌ Bot is not available right now.'); return }
-  await ctx.reply(`🛡️ Add TGGuard to Your Group
+  if (!botInfo) {
+    await sendRich(bot, chatId, '❌ Bot is not available right now.')
+    return
+  }
+  const text = `<b>🛡️ Add TGGuard to Your Group</b>
 
 1. Add @${botInfo.username} to your group
 2. Make it an administrator
 3. Return to the dashboard to verify
 
-[➕ Add TGGuard](https://t.me/${botInfo.username}?startgroup=true)`, {
-    parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard: [
-      [{ text: '➕ Add TGGuard', url: `https://t.me/${botInfo.username}?startgroup=true` }],
-      [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
-      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-    ]}
-  })
+<a href="https://t.me/${botInfo.username}?startgroup=true">➕ Add TGGuard</a>`
+
+  await sendRich(bot, chatId, text, inlineKeyboard([
+    [{ text: '➕ Add TGGuard', url: `https://t.me/${botInfo.username}?startgroup=true` }],
+    [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-async function showGamesMenu(ctx) {
-  const chatId = ctx.chat?.id
-  if (!chatId || ctx.chat?.type === 'private') {
-    await ctx.reply('🎮 TGGuard Games are played in Telegram groups. Enable them in your group dashboard.', {
-      reply_markup: { inline_keyboard: [
-        [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
-        [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
-        [{ text: '📖 How To Play', callback_data: 'how_to_play' }],
-        [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-      ]}
-    })
+async function showGamesMenu(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
+  if (!chatId || source.chat?.type === 'private') {
+    await sendRich(bot, chatId, `<b>🎮 TGGuard Games</b>
+
+Games are played in Telegram groups. Enable them in your group dashboard.`, inlineKeyboard([
+      [{ text: '🌐 Open Dashboard', url: process.env.FRONTEND_URL }],
+      [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
+      [{ text: '📖 How To Play', callback_data: 'how_to_play' }],
+      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+    ]))
     return
   }
   const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
-  if (!group) { await ctx.reply('❌ This group is not connected to TGGuard.'); return }
+  if (!group) {
+    await sendRich(bot, chatId, '❌ This group is not connected to TGGuard.')
+    return
+  }
   const settings = await db.collection('group_settings').findOne({ group_id: group._id })
-  if (!settings?.games_enabled) { await ctx.reply('🎮 Games are currently disabled in this group.'); return }
-  await ctx.reply('🎮 TGGuard Games', {
-    reply_markup: { inline_keyboard: [
-      [{ text: '🧩 Word Scramble', callback_data: 'word_scramble' }],
-      [{ text: '🌍 World Trivia', callback_data: 'world_trivia' }],
-      [{ text: '⚡ Speed Quiz', callback_data: 'speed_quiz' }],
-      [{ text: '🔤 Missing Letters', callback_data: 'missing_letters' }],
-      [{ text: '😀 Emoji Challenge', callback_data: 'emoji_challenge' }],
-      [{ text: '📖 How To Play', callback_data: 'how_to_play' }],
-      [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
-      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-    ]}
-  })
+  if (!settings?.games_enabled) {
+    await sendRich(bot, chatId, '🎮 Games are currently disabled in this group.')
+    return
+  }
+  await sendRich(bot, chatId, '<b>🎮 TGGuard Games</b>', inlineKeyboard([
+    [{ text: '🧩 Word Scramble', callback_data: 'word_scramble' }],
+    [{ text: '🌍 World Trivia', callback_data: 'world_trivia' }],
+    [{ text: '⚡ Speed Quiz', callback_data: 'speed_quiz' }],
+    [{ text: '🔤 Missing Letters', callback_data: 'missing_letters' }],
+    [{ text: '😀 Emoji Challenge', callback_data: 'emoji_challenge' }],
+    [{ text: '📖 How To Play', callback_data: 'how_to_play' }],
+    [{ text: '🏆 Leaderboard', callback_data: 'leaderboard' }],
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-async function showRateMenu(ctx) {
-  await ctx.reply('⭐ Rate TGGuard How would you rate your experience? ⭐ ⭐ ⭐ ⭐ ⭐', {
-    reply_markup: { inline_keyboard: [
-      [{ text: '⭐', callback_data: 'rate_1' }, { text: '⭐⭐', callback_data: 'rate_2' }],
-      [{ text: '⭐⭐⭐', callback_data: 'rate_3' }, { text: '⭐⭐⭐⭐', callback_data: 'rate_4' }],
-      [{ text: '⭐⭐⭐⭐⭐', callback_data: 'rate_5' }],
-      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-    ]}
-  })
+async function showRateMenu(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
+  await sendRich(bot, chatId, '<b>⭐ Rate TGGuard</b>\n\nHow would you rate your experience?', inlineKeyboard([
+    [{ text: '⭐', callback_data: 'rate_1' }, { text: '⭐⭐', callback_data: 'rate_2' }],
+    [{ text: '⭐⭐⭐', callback_data: 'rate_3' }, { text: '⭐⭐⭐⭐', callback_data: 'rate_4' }],
+    [{ text: '⭐⭐⭐⭐⭐', callback_data: 'rate_5' }],
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-async function showLeaderboard(ctx) {
+async function showLeaderboard(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
   const topScores = await db.collection('game_scores').aggregate([
     { $group: { _id: '$user_telegram_id', total: { $sum: '$score' }, username: { $first: '$username' } } },
     { $sort: { total: -1 } },
     { $limit: 10 }
   ]).toArray()
-  let text = '🏆 TGGuard Global Leaderboard'
-  if (topScores.length === 0) { text += '\n\nNo games played yet. Be the first!' }
-  else { topScores.forEach((s, i) => { const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`; text += `\n${medal} ${s.username || `User${s._id}`} — ${s.total} points` }) }
-  await ctx.reply(text, {
-    reply_markup: { inline_keyboard: [
-      [{ text: '🎮 Play Games', callback_data: 'games' }],
-      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-    ]}
-  })
+
+  let text = '<b>🏆 TGGuard Global Leaderboard</b>'
+  if (topScores.length === 0) {
+    text += '\n\nNo games played yet. Be the first!'
+  } else {
+    topScores.forEach((s, i) => {
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
+      text += `\n${medal} ${s.username || `User${s._id}`} — <b>${s.total}</b> points`
+    })
+  }
+
+  await sendRich(bot, chatId, text, inlineKeyboard([
+    [{ text: '🎮 Play Games', callback_data: 'games' }],
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-async function showHowToPlay(ctx) {
-  await ctx.reply(`📖 How to Play TGGuard Games
+async function showHowToPlay(source) {
+  const chatId = source.message?.chat?.id || source.chat?.id
+  const text = `<b>📖 How to Play TGGuard Games</b>
 
-🧩 Word Scramble - Unscramble letters. First correct wins!
-🌍 World Trivia - Answer geography questions.
-⚡ Speed Quiz - Answer quickly. Most points wins!
-🔤 Missing Letters - Fill in missing letters.
-😀 Emoji Challenge - Guess from emoji clues.
+<b>🧩 Word Scramble</b> — Unscramble letters. First correct wins!
+<b>🌍 World Trivia</b> — Answer geography questions.
+<b>⚡ Speed Quiz</b> — Answer quickly. Most points wins!
+<b>🔤 Missing Letters</b> — Fill in missing letters.
+<b>😀 Emoji Challenge</b> — Guess from emoji clues.
 
-All games played in Telegram!`, {
-    reply_markup: { inline_keyboard: [
-      [{ text: '🎮 Play Now', callback_data: 'games' }],
-      [{ text: '⬅️ Back', callback_data: 'main_menu' }]
-    ]}
-  })
+<i>All games played in Telegram!</i>`
+
+  await sendRich(bot, chatId, text, inlineKeyboard([
+    [{ text: '🎮 Play Now', callback_data: 'games' }],
+    [{ text: '⬅️ Back', callback_data: 'main_menu' }]
+  ]))
 }
 
-// GROUP HANDLERS
-async function handleBotAdded(ctx, chatId) {
-  const chat = ctx.chat
+// ─── GROUP HANDLERS ───
+async function handleBotAdded(msg, chatId) {
+  const chat = msg.chat
   const perms = await tg.getBotPermissions(chatId)
   const existing = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
 
-  // Detect who added the bot
-  const adderId = ctx.message?.from?.id || null
+  const adderId = msg.from?.id || null
 
   if (existing) {
     await db.collection('groups').updateOne(
       { _id: existing._id },
-      { $set: { 
-        name: chat.title, 
-        chat_type: chat.type, 
-        is_active: perms?.is_admin || false, 
-        bot_is_admin: perms?.is_admin || false, 
-        bot_permissions: perms, 
-        added_by: adderId,
-        updated_at: new Date() 
-      } }
+      {
+        $set: {
+          name: chat.title,
+          chat_type: chat.type,
+          is_active: perms?.is_admin || false,
+          bot_is_admin: perms?.is_admin || false,
+          bot_permissions: perms,
+          added_by: adderId,
+          updated_at: new Date()
+        }
+      }
     )
   } else {
     const result = await db.collection('groups').insertOne({
-      chat_id: BigInt(chatId), 
-      name: chat.title, 
+      chat_id: BigInt(chatId),
+      name: chat.title,
       chat_type: chat.type,
-      invite_link: chat.invite_link || null, 
+      invite_link: chat.invite_link || null,
       member_count: await tg.getChatMembersCount(chatId),
-      is_active: perms?.is_admin || false, 
-      is_verified: false, 
+      is_active: perms?.is_admin || false,
+      is_verified: false,
       bot_is_admin: perms?.is_admin || false,
-      bot_permissions: perms, 
-      admins: [], 
+      bot_permissions: perms,
+      admins: [],
       added_by: adderId,
-      created_at: new Date(), 
+      created_at: new Date(),
       updated_at: new Date()
     })
     await db.collection('group_settings').insertOne({
@@ -500,9 +534,8 @@ async function handleBotAdded(ctx, chatId) {
     })
   }
 
-  // ─── ONLY send DM if we know who added the bot ───
+  // DM to adder
   if (adderId) {
-    // OWNER LINK
     if (adderId.toString() === OWNER_TELEGRAM_ID) {
       try {
         const token = jwt.sign(
@@ -511,21 +544,15 @@ async function handleBotAdded(ctx, chatId) {
           { expiresIn: '7d' }
         )
         const ownerUrl = `${process.env.FRONTEND_URL}/owner/dashboard?token=${token}`
-        await tg.sendMessage(adderId, `✅ TGGuard is active in ${chat.title || 'your group'}!
+        await sendRich(bot, adderId, `<b>✅ TGGuard is active in ${chat.title || 'your group'}!</b>
 
-You are the owner. Access your owner panel:`, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '👑 Owner Panel', url: ownerUrl }]
-            ]
-          }
-        })
+You are the owner. Access your owner panel:`, inlineKeyboard([
+          [{ text: '👑 Owner Panel', url: ownerUrl }]
+        ]))
       } catch (dmErr) {
         console.error('Failed to send owner DM:', dmErr.message)
       }
-    }
-    // REGULAR USER LINK
-    else {
+    } else {
       try {
         const token = jwt.sign(
           { telegramId: adderId.toString(), groupId: chatId.toString(), role: 'community_admin' },
@@ -533,42 +560,32 @@ You are the owner. Access your owner panel:`, {
           { expiresIn: '7d' }
         )
         const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard?token=${token}`
-        await tg.sendMessage(adderId, `✅ TGGuard is active in ${chat.title || 'your group'}!
+        await sendRich(bot, adderId, `<b>✅ TGGuard is active in ${chat.title || 'your group'}!</b>
 
-Manage settings:`, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
-            ]
-          }
-        })
+Manage settings:`, inlineKeyboard([
+          [{ text: '🌐 Open Dashboard', url: dashboardUrl }]
+        ]))
       } catch (dmErr) {
         console.error('Failed to send DM to bot adder:', dmErr.message)
       }
     }
   }
 
-  // ─── Group message: ONLY show button if we know who added the bot ───
+  // Group message
   if (perms?.is_admin) {
     if (adderId) {
-      // We know who added it — show restricted button
-      await tg.sendMessage(chatId, `✅ TGGuard has been added!
+      await sendRich(bot, chatId, `<b>✅ TGGuard has been added!</b>
 
-Visit the dashboard to configure protection.`, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🌐 Open Dashboard', callback_data: 'dashboard_button' }]
-          ]
-        }
-      })
+Visit the dashboard to configure protection.`, inlineKeyboard([
+        [{ text: '🌐 Open Dashboard', callback_data: 'dashboard_button' }]
+      ]))
     } else {
-      // We DON'T know who added it — no button, just info
-      await tg.sendMessage(chatId, `✅ TGGuard has been added!
+      await sendRich(bot, chatId, `<b>✅ TGGuard has been added!</b>
 
 The bot will send a private message to the person who added it with the dashboard link.`)
     }
   } else {
-    await tg.sendMessage(chatId, `⚠️ TGGuard needs administrator permissions.
+    await sendRich(bot, chatId, `<b>⚠️ TGGuard needs administrator permissions.</b>
 
 Please grant:
 • Delete messages
@@ -577,7 +594,7 @@ Please grant:
   }
 }
 
-async function handleNewMember(ctx, chatId, member) {
+async function handleNewMember(msg, chatId, member) {
   const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
   if (!group || !group.is_active) return
   const settings = await db.collection('group_settings').findOne({ group_id: group._id })
@@ -585,7 +602,17 @@ async function handleNewMember(ctx, chatId, member) {
 
   await db.collection('group_members').updateOne(
     { group_id: group._id, telegram_id: BigInt(member.id) },
-    { $set: { username: member.username || null, first_name: member.first_name || null, last_name: member.last_name || null, is_admin: false, status: 'active', joined_at: new Date(), updated_at: new Date() } },
+    {
+      $set: {
+        username: member.username || null,
+        first_name: member.first_name || null,
+        last_name: member.last_name || null,
+        is_admin: false,
+        status: 'active',
+        joined_at: new Date(),
+        updated_at: new Date()
+      }
+    },
     { upsert: true }
   )
 
@@ -599,7 +626,7 @@ async function handleNewMember(ctx, chatId, member) {
   if (settings.welcome_enabled) {
     let welcomeText = ''
     if (settings.welcome_mode === 'default') {
-      welcomeText = `👋 Welcome to ${group.name}, ${member.first_name || 'there'}!
+      welcomeText = `<b>👋 Welcome to ${group.name}, ${member.first_name || 'there'}!</b>
 
 🛡️ This community is protected by TGGuard.
 
@@ -613,8 +640,10 @@ Please read the group rules and enjoy your stay.`
         .replace(/{member_count}/g, count)
     }
     if (welcomeText) {
-      const welcomeMsg = await tg.sendMessage(chatId, welcomeText, {
-        reply_markup: settings.welcome_buttons?.length > 0 ? { inline_keyboard: settings.welcome_buttons.map(b => [{ text: b.text, url: b.url || undefined, callback_data: b.callback_data || undefined }]) } : undefined
+      const welcomeMsg = await sendRich(bot, chatId, welcomeText, {
+        reply_markup: settings.welcome_buttons?.length > 0
+          ? { inline_keyboard: settings.welcome_buttons.map(b => [{ text: b.text, url: b.url || undefined, callback_data: b.callback_data || undefined }]) }
+          : undefined
       })
       if (settings.welcome_cleanup && welcomeMsg && settings.welcome_cleanup_time > 0) {
         setTimeout(async () => { await tg.deleteMessage(chatId, welcomeMsg.message_id) }, settings.welcome_cleanup_time * 1000)
@@ -627,11 +656,11 @@ Please read the group rules and enjoy your stay.`
     if (settings.bot_permissions?.can_restrict_members) {
       await tg.restrictUser(chatId, member.id, null, { can_send_messages: false, can_send_media_messages: false, can_send_other_messages: false })
     }
-    const verifyMsg = await tg.sendMessage(chatId, `👋 Welcome ${member.first_name || 'there'}!
+    const verifyMsg = await sendRich(bot, chatId, `<b>👋 Welcome ${member.first_name || 'there'}!</b>
 
-Before you can participate, please verify that you're human.`, {
-      reply_markup: { inline_keyboard: [[{ text: '✅ Verify Me', callback_data: `verify_${member.id}` }]] }
-    })
+Before you can participate, please verify that you're human.`, inlineKeyboard([
+      [{ text: '✅ Verify Me', callback_data: `verify_${member.id}` }]
+    ]))
     const expiresAt = new Date(Date.now() + (settings.verification_timeout || 300) * 1000)
     await db.collection('verification_sessions').insertOne({
       group_id: group._id, user_telegram_id: BigInt(member.id),
@@ -644,22 +673,28 @@ Before you can participate, please verify that you're human.`, {
         await db.collection('verification_sessions').updateOne({ _id: session._id }, { $set: { status: 'expired', updated_at: new Date() } })
         const action = settings.verification_timeout_action || 'remove'
         if (action === 'remove') await tg.kickUser(chatId, member.id)
-        else if (action === 'notify') await tg.sendMessage(chatId, `⏰ ${member.first_name || 'User'} did not complete verification in time.`)
+        else if (action === 'notify') await sendRich(bot, chatId, `⏰ ${member.first_name || 'User'} did not complete verification in time.`)
       }
     }, (settings.verification_timeout || 300) * 1000)
   }
 }
 
-async function handleVerification(ctx, data) {
-  const userId = ctx.from.id
-  const chatId = ctx.chat?.id
+async function handleVerification(query, data) {
+  const userId = query.from.id
+  const chatId = query.message?.chat?.id
   const targetUserId = parseInt(data.replace('verify_', ''))
-  if (userId !== targetUserId) { await ctx.answerCbQuery('❌ This verification is not for you.', { show_alert: true }); return }
+  if (userId !== targetUserId) {
+    await bot.answerCallbackQuery(query.id, { text: '❌ This verification is not for you.', show_alert: true })
+    return
+  }
   const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
   if (!group) return
   const session = await db.collection('verification_sessions').findOne({ group_id: group._id, user_telegram_id: BigInt(userId), status: 'pending' })
-  if (!session) { await ctx.answerCbQuery('❌ Verification session not found.', { show_alert: true }); return }
-  await ctx.answerCbQuery('✅ Verification successful!')
+  if (!session) {
+    await bot.answerCallbackQuery(query.id, { text: '❌ Verification session not found.', show_alert: true })
+    return
+  }
+  await bot.answerCallbackQuery(query.id, { text: '✅ Verification successful!' })
   if (group.bot_permissions?.can_restrict_members) {
     await tg.restrictUser(chatId, userId, null, { can_send_messages: true, can_send_media_messages: true, can_send_other_messages: true, can_add_web_page_previews: true })
   }
@@ -667,14 +702,14 @@ async function handleVerification(ctx, data) {
     { _id: session._id },
     { $set: { status: 'completed', completed_at: new Date(), updated_at: new Date() } }
   )
-  await ctx.reply('✅ You have been verified! Welcome to the group.')
+  await sendRich(bot, chatId, '✅ You have been verified! Welcome to the group.')
 }
 
-async function handleReport(ctx, data) {
-  await ctx.answerCbQuery('Report system coming soon!')
+async function handleReport(query, data) {
+  await bot.answerCallbackQuery(query.id, { text: 'Report system coming soon!' })
 }
 
-// UTILITIES
+// ─── UTILITIES ───
 function getMediaType(message) {
   if (message.photo) return 'photos'
   if (message.video) return 'videos'
@@ -688,34 +723,34 @@ function getMediaType(message) {
   return null
 }
 
-async function executeAction(ctx, action, reason) {
-  const chatId = ctx.chat.id
-  const messageId = ctx.message.message_id
-  const user = ctx.from
+async function executeAction(botInstance, msg, action, reason) {
+  const chatId = msg.chat.id
+  const messageId = msg.message_id
+  const user = msg.from
   switch (action) {
     case 'delete': return await tg.deleteMessage(chatId, messageId)
     case 'warn':
-      await addWarning(ctx, reason)
-      await tg.sendMessage(chatId, `⚠️ ${user.first_name || 'User'} has been warned.
-Reason: ${reason}`, { disable_notification: true })
+      await addWarning(msg, reason)
+      await sendRich(botInstance, chatId, `⚠️ <b>${user.first_name || 'User'}</b> has been warned.
+Reason: <i>${reason}</i>`, { disable_notification: true })
       return true
     case 'delete_warn':
       await tg.deleteMessage(chatId, messageId)
-      await addWarning(ctx, reason)
-      await tg.sendMessage(chatId, `⚠️ ${user.first_name || 'User'} has been warned.
-Reason: ${reason}`, { disable_notification: true })
+      await addWarning(msg, reason)
+      await sendRich(botInstance, chatId, `⚠️ <b>${user.first_name || 'User'}</b> has been warned.
+Reason: <i>${reason}</i>`, { disable_notification: true })
       return true
     case 'restrict':
       await tg.deleteMessage(chatId, messageId)
       await tg.restrictUser(chatId, user.id, Math.floor(Date.now() / 1000) + 3600)
-      await tg.sendMessage(chatId, `🔇 ${user.first_name || 'User'} restricted for 1 hour.
-Reason: ${reason}`, { disable_notification: true })
+      await sendRich(botInstance, chatId, `🔇 <b>${user.first_name || 'User'}</b> restricted for 1 hour.
+Reason: <i>${reason}</i>`, { disable_notification: true })
       return true
     case 'delete_restrict':
       await tg.deleteMessage(chatId, messageId)
       await tg.restrictUser(chatId, user.id, Math.floor(Date.now() / 1000) + 3600)
-      await tg.sendMessage(chatId, `🔇 ${user.first_name || 'User'} restricted for 1 hour.
-Reason: ${reason}`, { disable_notification: true })
+      await sendRich(botInstance, chatId, `🔇 <b>${user.first_name || 'User'}</b> restricted for 1 hour.
+Reason: <i>${reason}</i>`, { disable_notification: true })
       return true
     case 'kick':
       await tg.deleteMessage(chatId, messageId)
@@ -729,15 +764,15 @@ Reason: ${reason}`, { disable_notification: true })
   }
 }
 
-async function addWarning(ctx, reason) {
-  const chatId = ctx.chat.id
-  const user = ctx.from
+async function addWarning(msg, reason) {
+  const chatId = msg.chat.id
+  const user = msg.from
   const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
   if (!group) return
   await db.collection('warnings').insertOne({
     group_id: group._id, user_telegram_id: BigInt(user.id),
     username: user.username || null, first_name: user.first_name || null,
-    reason: reason, message_id: ctx.message.message_id, created_at: new Date()
+    reason: reason, message_id: msg.message_id, created_at: new Date()
   })
   await db.collection('group_members').updateOne(
     { group_id: group._id, telegram_id: BigInt(user.id) },
@@ -748,72 +783,144 @@ async function addWarning(ctx, reason) {
   if (settings) {
     if (warningCount >= 5) {
       await tg.kickUser(chatId, user.id)
-      await tg.sendMessage(chatId, `🚫 ${user.first_name || 'User'} removed after ${warningCount} warnings.`, { disable_notification: true })
+      await sendRich(bot, chatId, `🚫 <b>${user.first_name || 'User'}</b> removed after <b>${warningCount}</b> warnings.`, { disable_notification: true })
     } else if (warningCount >= 3) {
       await tg.restrictUser(chatId, user.id, Math.floor(Date.now() / 1000) + 86400)
-      await tg.sendMessage(chatId, `🔇 ${user.first_name || 'User'} restricted for 24 hours after ${warningCount} warnings.`, { disable_notification: true })
+      await sendRich(bot, chatId, `🔇 <b>${user.first_name || 'User'}</b> restricted for 24 hours after <b>${warningCount}</b> warnings.`, { disable_notification: true })
     }
   }
 }
 
-// GAME FUNCTIONS
-async function startGame(ctx, gameType) {
-  const chatId = ctx.chat?.id
-  if (!chatId) { await ctx.reply('❌ Games can only be played in groups.'); return }
+// ─── GAME FUNCTIONS ───
+async function startGame(query, gameType) {
+  const chatId = query.message?.chat?.id
+  if (!chatId) {
+    await sendRich(bot, chatId, '❌ Games can only be played in groups.')
+    return
+  }
   const group = await db.collection('groups').findOne({ chat_id: BigInt(chatId) })
-  if (!group) { await ctx.reply('❌ This group is not connected to TGGuard.'); return }
+  if (!group) {
+    await sendRich(bot, chatId, '❌ This group is not connected to TGGuard.')
+    return
+  }
   const settings = await db.collection('group_settings').findOne({ group_id: group._id })
-  if (!settings?.games_enabled) { await ctx.reply('🎮 Games are disabled in this group.'); return }
+  if (!settings?.games_enabled) {
+    await sendRich(bot, chatId, '🎮 Games are disabled in this group.')
+    return
+  }
   const gameConfig = await db.collection('game_configurations').findOne({ group_id: group._id })
-  const isAdmin = await tg.isUserAdmin(chatId, ctx.from.id)
+  const isAdmin = await tg.isUserAdmin(chatId, query.from.id)
   const canStart = settings.games_permission === 'members' || (settings.games_permission === 'admins' && isAdmin) || (settings.games_permission === 'approval' && isAdmin)
-  if (!canStart) { await ctx.reply('🎮 Only admins can start games in this group.'); return }
+  if (!canStart) {
+    await sendRich(bot, chatId, '🎮 Only admins can start games in this group.')
+    return
+  }
   const lastGame = await db.collection('game_sessions').findOne({ group_id: group._id }, { sort: { created_at: -1 } })
   if (lastGame) {
     const cooldownMs = (gameConfig?.cooldown_minutes || 5) * 60 * 1000
     if (Date.now() - lastGame.created_at.getTime() < cooldownMs) {
       const remaining = Math.ceil((cooldownMs - (Date.now() - lastGame.created_at.getTime())) / 1000)
-      await ctx.reply(`⏳ Please wait ${remaining}s before starting another game.`)
+      await sendRich(bot, chatId, `⏳ Please wait <b>${remaining}s</b> before starting another game.`)
       return
     }
   }
   const session = await db.collection('game_sessions').insertOne({
-    group_id: group._id, chat_id: BigInt(chatId), host_user_id: BigInt(ctx.from.id),
-    host_username: ctx.from.username || null, game_type: gameType, status: 'waiting',
+    group_id: group._id, chat_id: BigInt(chatId), host_user_id: BigInt(query.from.id),
+    host_username: query.from.username || null, game_type: gameType, status: 'waiting',
     current_round: 0, total_rounds: gameType === 'speed' ? 10 : 1, scores: {}, players: [],
     started_at: null, ended_at: null, created_at: new Date()
   })
-  await runGameRound(ctx, session.insertedId, gameType, 1)
+  await runGameRound(query, session.insertedId, gameType, 1)
 }
 
-async function runGameRound(ctx, sessionId, gameType, round) {
+async function runGameRound(query, sessionId, gameType, round) {
   const gameContent = getGameContent(gameType, round)
   await db.collection('game_sessions').updateOne(
     { _id: sessionId },
     { $set: { status: 'active', current_round: round, started_at: new Date() } }
   )
-  await ctx.reply(gameContent.text, { reply_markup: gameContent.keyboard })
+  await sendRich(bot, query.message?.chat?.id, gameContent.text, { reply_markup: gameContent.keyboard })
   const timeLimit = gameContent.timeLimit || 30
   setTimeout(async () => { await endGameRound(sessionId, round) }, timeLimit * 1000)
 }
 
 function getGameContent(gameType, round) {
   const games = {
-    scramble: { text: '🧩 WORD SCRAMBLE\n\nUnscramble:\n\nN O D L O N\n\n⏱️ 30 seconds\n\nFirst correct answer wins!', keyboard: { inline_keyboard: [] }, timeLimit: 30, answer: 'london' },
-    trivia: { text: '🌍 WORLD TRIVIA\n\nWhich country is home to the city of Berlin?\n\nA. France\nB. Germany\nC. Italy\nD. Spain\n\n⏱️ 15 seconds', keyboard: { inline_keyboard: [
-      [{ text: 'A. France', callback_data: 'game_answer_a' }],
-      [{ text: 'B. Germany', callback_data: 'game_answer_b' }],
-      [{ text: 'C. Italy', callback_data: 'game_answer_c' }],
-      [{ text: 'D. Spain', callback_data: 'game_answer_d' }]
-    ]}, timeLimit: 15, answer: 'b' },
-    letters: { text: '🔤 COMPLETE THE WORD\n\nG _ R M _ N Y\n\nFirst correct answer wins.', keyboard: { inline_keyboard: [] }, timeLimit: 30, answer: 'germany' },
-    emoji: { text: '🧠 EMOJI CHALLENGE\n\n🗼🥐🇫🇷\n\nWhat country is represented?', keyboard: { inline_keyboard: [] }, timeLimit: 30, answer: 'france' },
-    speed: { text: `⚡ SPEED QUIZ - Question ${round}/10\n\nWhat is the capital of Japan?\n\nA. Beijing\nB. Seoul\nC. Tokyo\nD. Bangkok`, keyboard: { inline_keyboard: [
-      [{ text: 'A. Beijing', callback_data: 'game_answer_a' }],
-      [{ text: 'B. Seoul', callback_data: 'game_answer_b' }],
-      [{ text: 'C. Tokyo', callback_data: 'game_answer_c' }],
-      [{ text: 'D. Bangkok', callback_data: 'game_answer_d' }]
-    ]}, timeLimit: 15, answer: 'c' }
+    scramble: {
+      text: `<b>🧩 WORD SCRAMBLE</b>
+
+Unscramble:
+
+<code>N O D L O N</code>
+
+⏱️ <b>30 seconds</b>
+<i>First correct answer wins!</i>`,
+      keyboard: { inline_keyboard: [] },
+      timeLimit: 30,
+      answer: 'london'
+    },
+    trivia: {
+      text: `<b>🌍 WORLD TRIVIA</b>
+
+Which country is home to the city of Berlin?
+
+A. France
+B. Germany
+C. Italy
+D. Spain
+
+⏱️ <b>15 seconds</b>`,
+      keyboard: {
+        inline_keyboard: [
+          [{ text: 'A. France', callback_data: 'game_answer_a' }],
+          [{ text: 'B. Germany', callback_data: 'game_answer_b' }],
+          [{ text: 'C. Italy', callback_data: 'game_answer_c' }],
+          [{ text: 'D. Spain', callback_data: 'game_answer_d' }]
+        ]
+      },
+      timeLimit: 15,
+      answer: 'b'
+    },
+    letters: {
+      text: `<b>🔤 COMPLETE THE WORD</b>
+
+<code>G _ R M _ N Y</code>
+
+<i>First correct answer wins.</i>`,
+      keyboard: { inline_keyboard: [] },
+      timeLimit: 30,
+      answer: 'germany'
+    },
+    emoji: {
+      text: `<b>🧠 EMOJI CHALLENGE</b>
+
+🗼🥐🇫🇷
+
+What country is represented?`,
+      keyboard: { inline_keyboard: [] },
+      timeLimit: 30,
+      answer: 'france'
+    },
+    speed: {
+      text: `<b>⚡ SPEED QUIZ — Question ${round}/10</b>
+
+What is the capital of Japan?
+
+A. Beijing
+B. Seoul
+C. Tokyo
+D. Bangkok`,
+      keyboard: {
+        inline_keyboard: [
+          [{ text: 'A. Beijing', callback_data: 'game_answer_a' }],
+          [{ text: 'B. Seoul', callback_data: 'game_answer_b' }],
+          [{ text: 'C. Tokyo', callback_data: 'game_answer_c' }],
+          [{ text: 'D. Bangkok', callback_data: 'game_answer_d' }]
+        ]
+      },
+      timeLimit: 15,
+      answer: 'c'
+    }
   }
   return games[gameType] || games.scramble
 }
@@ -829,20 +936,20 @@ async function endGameRound(sessionId, round) {
   }
 }
 
-async function handleGameCallback(ctx, data) {
-  await ctx.answerCbQuery('Answer recorded!')
+async function handleGameCallback(query, data) {
+  await bot.answerCallbackQuery(query.id, { text: 'Answer recorded!' })
 }
 
-// START / STOP / STATUS
+// ─── START / STOP / STATUS ───
 export async function startBot(mode = 'polling') {
   if (!bot) bot = initBot()
   if (!bot) { console.error('Bot initialization failed'); return false }
   try {
     if (mode === 'webhook' && process.env.WEBHOOK_URL) {
-      await bot.launch({ webhook: { domain: process.env.WEBHOOK_URL, port: process.env.BOT_PORT || 3001 } })
+      await bot.setWebHook(`${process.env.WEBHOOK_URL}/bot${BOT_TOKEN}`)
       console.log('Bot started in webhook mode')
     } else {
-      await bot.launch()
+      await bot.startPolling()
       console.log('Bot started in polling mode')
     }
     isRunning = true
@@ -861,7 +968,7 @@ export async function startBot(mode = 'polling') {
 
 export async function stopBot() {
   if (bot) {
-    bot.stop()
+    await bot.stopPolling()
     isRunning = false
     await db.collection('bot_state').updateOne(
       { key: 'status' },
