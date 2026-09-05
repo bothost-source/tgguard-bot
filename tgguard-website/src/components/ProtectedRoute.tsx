@@ -3,11 +3,14 @@ import { useAuth } from '../context/AuthContext'
 import { ReactNode } from 'react'
 
 interface Props { children: ReactNode; allowedRoles?: string[] }
+
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
-  const { user, isLoading, isAuthenticated, isBotLoggingIn } = useAuth()
+  const { user, isLoading, isAuthenticated, isBotLoggingIn, isRestoring } = useAuth()
   const location = useLocation()
 
-  if (isLoading || isBotLoggingIn) {
+  const hasTokenInUrl = new URLSearchParams(location.search).has('token')
+  
+  if (isLoading || isBotLoggingIn || isRestoring || hasTokenInUrl) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -18,10 +21,13 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
     )
   }
 
-  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
+  if (!isAuthenticated) return <Navigate to="/" state={{ from: location }} replace />
+  
   if (!allowedRoles || allowedRoles.length === 0) return <>{children}</>
+  
   if (!allowedRoles.includes(user!.role)) {
     return <Navigate to={user!.role === 'owner' ? '/owner/dashboard' : '/dashboard'} replace />
   }
+  
   return <>{children}</>
 }
